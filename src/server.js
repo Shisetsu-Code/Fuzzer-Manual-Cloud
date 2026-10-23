@@ -29,6 +29,7 @@ const scheduler=new Scheduler({db,browser,cache,workers:config.workers,rootWorke
 // Only recover local polling. Remote commands retain their immutable IDs.
 db.db.prepare("UPDATE tasks SET status='queued' WHERE status='preparing'").run();
 await browser.start();
+db.setSetting('fleet-runtime','sequence3');
 const recovery=new FleetRecovery({db,browser,launch:launchFleet});
 const recoveryTimer=setInterval(()=>recovery.tick().catch(e=>{recovery.error=e.message;}),10000);recoveryTimer.unref();
 // Reattach outstanding read-only observations when updating the local client.
