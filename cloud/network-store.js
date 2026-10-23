@@ -17,7 +17,7 @@ export async function networkRoute(request,env){
  }
  if((u.pathname==='/network'||download)&&request.method==='GET'){
   const clientId=u.searchParams.get('clientId');if(!valid(clientId))throw Error('Invalid archive client');
-  if(!download){const listed=await env.SHOTS.list({prefix:`network/${clientId}/manifests/`,limit:1000,cursor:u.searchParams.get('cursor')||undefined});const items=[];for(const object of listed.objects){const item=await env.SHOTS.get(object.key);if(item)items.push(await item.json());}return json({items,cursor:listed.truncated?listed.cursor:null});}
+  if(!download){const listed=await env.SHOTS.list({prefix:`network/${clientId}/manifests/`,limit:40,cursor:u.searchParams.get('cursor')||undefined});const items=[];for(const object of listed.objects){const item=await env.SHOTS.get(object.key);if(item)items.push(await item.json());}return json({items,cursor:listed.truncated?listed.cursor:null});}
   if(!valid(download[1]))throw Error('Invalid archive');const manifest=await env.SHOTS.get(`network/${clientId}/manifests/${download[1]}.json`);if(!manifest)return json({error:'Archive not found'},404);
   if(download[2]==='manifest')return json(await manifest.json());const data=await manifest.json(),index=Number(download[3]);if(!Number.isInteger(index)||!data.parts[index])return json({error:'Part not found'},404);
   const part=await env.SHOTS.get(`network/${clientId}/${download[1]}/part-${index}`);if(!part)return json({error:'Part not found'},404);return new Response(part.body,{headers:{'Content-Type':'application/octet-stream','Cache-Control':'no-store'}});
