@@ -17,6 +17,7 @@ async function api(url,method='GET',body){const res=await fetch(url,{method,head
   try{data=await res.json();}catch{data={error:`HTTP ${res.status}`};}
   if(!res.ok)throw Error(data.error||`HTTP ${res.status}`);return data;
 }
+function singleChoice(item){return item?.branchable===false&&!!(item.live||item.capture?.manualReview||item.capture?.requiresLive||item.capture?.state==='BONUS');}
 function captureWaiting(id){return store.refreshing.has(id)||store.serverRefreshing.has(id);}
 function getCurrent(){return store.review||store.items.find(x=>x.id===store.selectedId)||null;}
 function canFinishGame(game,item){
@@ -189,6 +190,7 @@ function addMark(e,kind){
   if(!store.marks.length){store.markCaptureVersion=getCurrent()?.capture?.capturedAt??null;store.saveError='';}
   if(captureWaiting(getCurrent()?.id))return;
   if(store.review||!getCurrent())return;
+  if(singleChoice(getCurrent())&&store.marks.length)return toast('Una opción por vez en esta pantalla. Guardá el clic actual o usá Deshacer para cambiarlo.',true);
   if(kind==='click'&&!store.features.freeClicks)return toast('Los clics libres se activarán al reiniciar el servidor actualizado.',true);
   if(kind==='antebet'&&!store.features.antebet)return toast('Antebet estará disponible al reiniciar el servidor actualizado. Tus sesiones siguen abiertas.',true);
   const r=$('shot').getBoundingClientRect();const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
@@ -203,6 +205,7 @@ async function commit(skip=false){
  if(store.review){store.review=null;display();return;}
  const item=getCurrent();if(!item||store.saving.has(item.id))return;
  if(captureWaiting(item.id))return toast('La captura se está actualizando. Tus marcas siguen guardadas aquí.',true);
+ if(!skip&&singleChoice(item)&&store.marks.length>1)return toast('Usá Deshacer hasta dejar una sola marca y luego guardá.',true);
  const marks=skip?[]:[...store.marks];store.markCaptureVersion??=item.capture?.capturedAt??null;store.saving.add(item.id);renderCaptureWait();
  try{
   const result=await api(`/api/tasks/${item.id}/commit`,'POST',{marks,captureVersion:store.markCaptureVersion});
@@ -303,6 +306,7 @@ function renderCaptureWait(){
  $('cloud-wait').textContent=busy?(store.remoteOperations.get(item.id)?.state==='queued'?'Esperando worker libre…':'Esperando nueva captura…'):'Sigue cargando · esperar y capturar';
  if(store.saveError){$('live-note').hidden=false;$('live-note').textContent=store.saveError;}
  if(item&&store.marks.length&&store.markCaptureVersion&&store.markCaptureVersion!==item.capture?.capturedAt){$('save-btn').disabled=true;$('live-note').hidden=false;$('live-note').textContent='La captura cambió. Tus marcas anteriores se conservaron; limpiá y volvé a marcar sobre la imagen nueva antes de guardar.';}
+ if(item&&singleChoice(item)&&!busy){$('hint').textContent='Una opción por vez · Deshacer para cambiar el clic';if(store.marks.length>1){$('save-btn').disabled=true;$('live-note').hidden=false;$('live-note').textContent='Hay varias marcas. Usá Deshacer hasta dejar una sola; después guardá.';}}
  const waitError=item&&store.waitErrors.get(item.id);if(waitError){$('live-note').hidden=false;$('live-note').textContent=`No llegó una captura nueva: ${waitError}. La imagen visible es la anterior.`;}
  if(busy){$('save-btn').disabled=true;$('skip-btn').disabled=true;$('finish-btn').disabled=true;}
 }

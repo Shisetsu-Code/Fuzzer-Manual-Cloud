@@ -27,10 +27,10 @@ test('left and right clicks mark several independent purchase and antebet option
   assert.equal(prevented,2);assert.equal(get('pins').children[1].textContent,'A2');
 });
 
-test('review stays read-only while a live bonus permits several marks',()=>{
+test('review stays read-only and a single-choice live bonus permits only one mark',()=>{
   const {get,state}=ui();const click=()=>get('image-wrap').events.contextmenu({clientX:200,clientY:200,preventDefault(){}});
   state.review={id:2};click();assert.equal(state.marks.length,0);
-  state.review=null;state.items[0].live=true;click();click();assert.equal(state.marks.length,2);
+  state.review=null;state.items[0].live=true;state.items[0].branchable=false;click();click();assert.equal(state.marks.length,1);
 });
 
 test('an older server cannot silently accept unsupported antebet marks',()=>{
@@ -132,4 +132,8 @@ test('executed click indicators are green and text action lists stay hidden',()=
  const css=fs.readFileSync(new URL('../public/style.css',import.meta.url),'utf8'),html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
  assert.match(css,/\.previous-click\{[^}]*#7aff9a/);assert.match(html,/id="action-history" hidden/);assert.match(html,/id="mark-list"[^>]*hidden/);assert.match(html,/Verde: clic ya ejecutado aquí/);assert.match(html,/Azul: marca nueva sin ejecutar/);
  const {get,state,renderPins}=ui();state.items[0].previousClicks=[{id:2,x:.25,y:.75,label:'Clic',onRoute:true}];renderPins();const pin=get('pins').children[0];assert.equal(pin.style.left,'25%');assert.equal(pin.style.top,'75%');assert.equal(pin.textContent,'✓');assert.match(get('marks-count').textContent,/1 clics realizados aquí/);
+});
+
+test('single choice screens explain and prevent saving multiple old marks before contacting the server',async()=>{
+ let calls=0;const {context,state,get,commit}=ui(async()=>{calls++;throw Error('unexpected');});state.items=[{id:191,game_id:24,slug:'bup',live:true,branchable:false}];state.selectedId=191;state.marks=[{x:.2,y:.3,kind:'click'},{x:.4,y:.5,kind:'click'}];context.renderCaptureWait();assert.equal(get('save-btn').disabled,true);assert.match(get('live-note').textContent,/Deshacer/);await commit();assert.equal(calls,0);assert.equal(state.marks.length,2);
 });
