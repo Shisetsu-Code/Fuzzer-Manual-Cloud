@@ -1,0 +1,8 @@
+import fs from 'node:fs';import fsp from 'node:fs/promises';import {pipeline} from 'node:stream/promises';import {createGzip} from 'node:zlib';import {createHash,randomUUID} from 'node:crypto';
+export async function uploadNetwork(file,metadata,{endpoint,token,workerId,clientId,fetcher=fetch}){
+ const gz=file+'.gz';await pipeline(fs.createReadStream(file),createGzip(),fs.createWriteStream(gz));const id='har-'+randomUUID(),parts=[];
+ const handle=await fsp.open(gz,'r');try{for(let offset=0,index=0;;index++){const buffer=Buffer.alloc(4*1024*1024),{bytesRead}=await handle.read(buffer,0,buffer.length,offset);if(!bytesRead)break;offset+=bytesRead;const chunk=buffer.subarray(0,bytesRead),sha256=createHash('sha256').update(chunk).digest('hex');parts.push({size:bytesRead,sha256});
+  for(let attempt=0;;attempt++){try{const r=await fetcher(`${endpoint}/worker/network/${id}/part/${index}`,{method:'POST',headers:{Authorization:'Bearer '+token,'X-Client-Id':clientId,'X-Worker-Id':workerId,'X-Content-SHA256':sha256},body:chunk,signal:AbortSignal.timeout(60000)});if(!r.ok)throw Error('Network archive upload '+r.status);break;}catch(e){if(attempt>=3)throw e;await new Promise(r=>setTimeout(r,1000));}}
+ }}finally{await handle.close();}
+ const response=await fetcher(`${endpoint}/worker/network/${id}/complete`,{method:'POST',headers:{Authorization:'Bearer '+token,'X-Client-Id':clientId,'X-Worker-Id':workerId,'Content-Type':'application/json'},body:JSON.stringify({parts,metadata}),signal:AbortSignal.timeout(60000)});if(!response.ok)throw Error('Network manifest upload '+response.status);await fsp.rm(gz,{force:true});return {id,metadata};
+}

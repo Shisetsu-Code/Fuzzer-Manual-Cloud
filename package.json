@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/server.js && node --check src/browser.js && node --check src/scheduler.js && node --check public/app.js && node --check cloud/coordinator.js && node --check cloud/runner.mjs && node --check src/remote-browser.js",
+    "check": "node --check src/server.js && node --check src/browser.js && node --check src/scheduler.js && node --check public/app.js && node --check cloud/coordinator.js && node --check cloud/runner.mjs && node --check src/remote-browser.js && node --check cloud/network-store.js && node --check cloud/network-upload.mjs && node --check cloud/replay-route.mjs && node --check src/network-client.js && node --check src/replay-plan.js && node --check src/replay-manager.js",
     "benchmark": "node scripts/benchmark-store.js",
     "worker": "node cloud/runner.mjs"
   },

@@ -12,9 +12,9 @@
   <header class="topbar">
     <div class="brand"><span class="logo">F<span class="slash">/</span>M</span><div><b>Fuzzer Manual Cloud</b><small>Catalogador visual · DEMO</small></div></div>
     <div class="top-stats"><span><b id="stat-ready">0/20</b> juegos preparados</span><span id="buffer-note"></span></div>
-    <div class="head-actions"><button id="progress-open">Registro</button><button id="import-open" class="primary">+ Importar URLs</button><button id="pause-btn">Iniciar workers</button><button id="settings-open" title="Atajos configurables">⚙ Configurar</button></div>
+    <div class="head-actions"><button id="network-open">Requests y HAR</button><button id="progress-open">Registro</button><button id="import-open" class="primary">+ Importar URLs</button><button id="pause-btn">Iniciar workers</button><button id="settings-open" title="Atajos configurables">⚙ Configurar</button></div>
   </header>
-  <section class="cloud-controls"><strong id="app-version">v3 · Secuencias S1 → S2</strong>
+  <section class="cloud-controls"><strong id="app-version">v4 · HAR y repetición</strong>
     <label>Workers <input id="cloud-workers" type="number" min="1" max="20" value="4"></label>
     <label>Juegos por worker <input id="cloud-games" type="number" min="1" max="8" value="8"></label>
     <label>Duración (min) <input id="cloud-minutes" type="number" min="5" max="300" value="60"></label>
@@ -43,6 +43,7 @@
       <div class="live-note" id="live-note" hidden></div>
     </aside>
   </main>
+  <dialog id="network-dialog" class="progress-dialog"><form method="dialog"><div class="dialog-head"><h2>Requests, endpoints y payloads</h2><button class="close">✕</button></div><p>Repite las rutas guardadas en sesiones nuevas y registra tráfico HTTP completo. Conserva las marcas originales. Las respuestas y premios pueden cambiar.</p><button type="button" id="replay-start" class="primary">Recuperar requests del historial</button><button type="button" id="network-refresh">Actualizar archivos</button><p id="replay-status"></p><div id="network-files"></div><div class="dialog-actions"><button>Cerrar</button></div></form></dialog>
   <dialog id="progress-dialog" class="progress-dialog">
     <form method="dialog"><div class="dialog-head"><h2>Registro e historial</h2><button class="close" value="cancel">✕</button></div>
       <div class="history-tools"><select id="history-provider" aria-label="Proveedor del historial"><option value="">Todos los proveedores</option></select><label><input type="checkbox" id="history-review"> Solo para revisar</label><button type="button" id="export-csv">Exportar CSV</button><button type="button" id="export-json">Exportar JSON con caminos</button></div>

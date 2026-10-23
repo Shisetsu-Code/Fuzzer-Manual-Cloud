@@ -55,7 +55,7 @@ export class BrowserEngine {
     if(!task.replay_branch&&(steps.some(x=>captureNeedsLive(captureOf(x.parent)))||steps.slice(0,-1).some(x=>markNeedsLive(captureOf(x.parent),x.mark))))return true;
     return this.live.size+this.reservations.size<(this.config.maxLive??4);
   }
-  async fresh(url){
+  async fresh(url,recordingMeta={}){
     url=publicDemoUrl(url);
     await this.start();
     const ctxOptions={viewport:{width:this.config.viewportWidth,height:this.config.viewportHeight},deviceScaleFactor:1,serviceWorkers:'allow',acceptDownloads:false};
@@ -67,9 +67,11 @@ export class BrowserEngine {
       }
       ctxOptions.storageState=this.entryPreferences.get(provider);
     }
+    let harPath;if(this.config.captureNetwork){const networkDir=path.join(this.config.dataDir,'network');await fs.mkdir(networkDir,{recursive:true});harPath=path.join(networkDir,randomUUID()+'.har');ctxOptions.recordHar={path:harPath,mode:'full',content:'embed'};}
     const context=await this.browser.newContext(ctxOptions);
     const page=await context.newPage();this.metrics.sessionsOpened++;
-    const session={context,page,events:[],created:Date.now(),url,entryUrl:await this.resolveEntry(url)};
+    const session={context,page,harPath,...recordingMeta,httpCount:0,actionLog:[],events:[],created:Date.now(),url,entryUrl:await this.resolveEntry(url)};
+    if(harPath){context.on('request',()=>{session.httpCount++;});session.wsPath=harPath+'.ws.jsonl';session.wsPending=Promise.resolve();session.wsCount=0;const bind=p=>p.on('websocket',socket=>{for(const [event,direction] of [['framesent','sent'],['framereceived','received']])socket.on(event,frame=>{const entry={at:new Date().toISOString(),url:socket.url(),direction,taskId:session.taskId??null,encoding:Buffer.isBuffer(frame.payload)?'base64':'utf8',payload:Buffer.isBuffer(frame.payload)?frame.payload.toString('base64'):frame.payload};session.wsCount++;session.wsPending=session.wsPending.then(()=>fs.appendFile(session.wsPath,JSON.stringify(entry)+'\n'));});});bind(page);context.on('page',p=>{if(p!==page)bind(p);});}
     page.on('requestfailed',request=>{const issue=startupNetworkIssue(provider,request.url());if(issue)session.entryIssue=issue;});
     page.on('response',response=>{
       const u=(()=>{try{const v=new URL(response.url());return `${v.origin}${v.pathname}`;}catch{return ''}})();
@@ -93,7 +95,8 @@ export class BrowserEngine {
         await fs.writeFile(tmp,JSON.stringify(state));await fs.rename(tmp,file);
       }catch{/* Preference caching never interrupts a game or its cleanup. */}
     }
-    if(session?.context)await session.context.close().catch(()=>{});
+    if(session?.context&&!session.networkClosed){session.networkClosed=true;await session.context.close().catch(e=>{session.harCloseError=e.message;});if(session.wsPending)await session.wsPending.catch(e=>{session.wsError=e.message;});
+      if(session.harPath&&this.onArchive)await this.onArchive(session);}
   }
   async dismissConsent(session){
     let handled=0;
@@ -398,7 +401,7 @@ export class BrowserEngine {
     const x=current.clip.x+mark.x*current.clip.width,y=current.clip.y+mark.y*current.clip.height;
     if(!this.inClip(current.clip,x,y))throw new ReplayError('CLICK_OUTSIDE_DEMO');
     // Once a click starts, a failed wait must never cause it to be replayed.
-    session.actionStarted=true;
+    session.actionStarted=true;session.actionLog?.push({at:new Date().toISOString(),taskId:session.taskId,markId:mark.id??null,kind:mark.kind,x:mark.x,y:mark.y,phase:'input-sent'});
     onStarted?.();
     session.pendingTransition=!manual&&!['antebet','antebet_toggle','click'].includes(mark.kind)&&markNeedsLive(expected,mark)?current.signature:null;
     await session.page.mouse.click(x,y);this.metrics.clicks++;
@@ -427,7 +430,7 @@ export class BrowserEngine {
       if(!Number.isFinite(point.x)||!Number.isFinite(point.y)||point.x<0||point.x>1||point.y<0||point.y>1)throw new ReplayError('INVALID_MARK');
       const x=clip.x+point.x*clip.width,y=clip.y+point.y*clip.height;
       if(!this.inClip(clip,x,y))throw new ReplayError('CLICK_OUTSIDE_DEMO');
-      session.actionStarted=true;flow.cursor=index+1;flow.uncertain=true;
+      session.actionStarted=true;session.actionLog?.push({at:new Date().toISOString(),taskId:session.taskId,markId:mark.id??null,kind:'sequence',sequenceIndex:index+1,x:point.x,y:point.y,phase:'input-sent'});flow.cursor=index+1;flow.uncertain=true;
       await session.page.mouse.click(x,y);this.metrics.clicks++;flow.uncertain=false;
       flow.completed.push({x:point.x,y:point.y,index:index+1,label:point.label||''});
       if(flow.cursor<steps.length)await sleep(this.config.sequenceStepDelayMs??700);
@@ -501,7 +504,7 @@ export class BrowserEngine {
     this.metrics.screenshots++;this.metrics.bytes+=bytes.length;
     const visualKey=await imageSignature(bytes);
     if(manualReason)session.manualToken ||= randomUUID();
-    return {file:target,capture:{...(session.sequenceFlow?{sequence:session.sequenceFlow}:{}),visualKey,clip:view.clip,width:view.clip.width,height:view.clip.height,actionApplied,
+    return {file:target,capture:{...(session.harPath?{networkCapture:{enabled:true,status:'recording',format:'HAR 1.2',sessionId:path.basename(session.harPath,'.har')}}:{}),...(session.sequenceFlow?{sequence:session.sequenceFlow}:{}),visualKey,clip:view.clip,width:view.clip.width,height:view.clip.height,actionApplied,
       ...(manualReason?{manualReview:true,manualReason,manualToken:session.manualToken,entryReview:!!view.entryReview}:{}),
       initialLoadWaitApplied:session.initialLoadWaitApplied===true,startupVersion:2,gameRunning:session.genericRunning===true||!['INTRO','UNKNOWN'].includes(view.state),entryIssue:session.entryIssue||null,entryOverlaysVersion:1,rootMode,state:view.state,signature:view.signature,controls:view.controls,
       frameUrl:view.frameUrl,network:session.events.slice(-25),capturedAt:new Date().toISOString(),bytes:bytes.length}};
@@ -523,7 +526,8 @@ export class BrowserEngine {
     if(inherited&&sourceParent)this.busyParents.add(sourceParent.id);
     let success=false,atTarget=false;
     try{
-      if(!session)session=await this.fresh(task.url);
+      if(!session)session=await this.fresh(task.url,{taskId:task.id,gameId:task.game_id});
+      session.taskId=task.id;session.gameId=task.game_id;
       session.actionStarted=false;
       if(lineage.length&&!recovering){session.manualReason=null;delete session.sequenceFlow;}
       let mode=recovering?session.rootMode||'base':'base';

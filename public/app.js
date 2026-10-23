@@ -147,7 +147,7 @@ function renderQueue(){
   }
 }
 function renderStatus(status){
-  $('app-version').textContent=`v3 · S1 → S2 · ${(status.cloud?.workers||[]).filter(w=>w.id.endsWith('-sequence3')).length} workers actualizados`;
+  $('app-version').textContent=`v4 · HAR · ${(status.cloud?.workers||[]).filter(w=>w.id.endsWith('-har4')).length} workers con captura de requests`;
   store.serverRefreshing=new Set(status.cloud?.refreshingTasks||[]);
   store.remoteOperations=new Map((status.cloud?.operations||[]).map(op=>[op.taskId,op]));
   const lanes=status.providerWorkers||[];
@@ -286,7 +286,7 @@ $('save-keys').addEventListener('click',async()=>{
   if(unique.some(x=>!x)||new Set(unique).size!==unique.length)return toast('Los atajos no pueden estar vacíos ni repetidos',true);
   try{await api('/api/settings','POST',{hotkeys:keys});store.hotkeys=keys;$('settings-dialog').close();toast('Atajos guardados');}catch(e){toast(e.message,true);}
 });
-async function init(){loadProviders();try{const cfg=await api('/api/settings');store.features=cfg.features||{};if(cfg.hotkeys)for(const action of Object.keys(DEFAULT_KEYS)){if(cfg.hotkeys[action])store.hotkeys[action]=cfg.hotkeys[action];}}catch{}fillKeys();await refresh();setInterval(refresh,1300);}
+async function init(){loadProviders();try{const cfg=await api('/api/settings');store.features=cfg.features||{};if(cfg.hotkeys)for(const action of Object.keys(DEFAULT_KEYS)){if(cfg.hotkeys[action])store.hotkeys[action]=cfg.hotkeys[action];}}catch{}fillKeys();await refresh();setInterval(refresh,1300);setInterval(()=>{if($('network-dialog').open)renderNetwork();},5000);}
 
 $('provider-filter').addEventListener('change',()=>{
   if(store.marks.length){$('provider-filter').value=store.providerFilter;toast('Guarda tus clics antes de cambiar de proveedor.');return;}
@@ -319,5 +319,18 @@ async function updateCapture(waitSeconds=0){
 }
 $('cloud-refresh').addEventListener('click',()=>updateCapture());
 $('cloud-wait').addEventListener('click',()=>updateCapture(Number($('cloud-wait-seconds').value)));
+
+
+async function renderNetwork(){
+ try{const data=await api('/api/network');const status=$('replay-status');status.replaceChildren();
+ for(const job of data.replays){const row=document.createElement('p');row.textContent=`${job.gameCount} juegos · ${job.counts.replayed||0}/${job.routeCount} rutas con HAR · ${job.counts.partial||0} parciales · ${job.counts.dispatched||0} en curso · ${job.counts.queued||0} pendientes · ${job.status} `;const link=document.createElement('a');link.href=`/api/replay/${job.id}/report`;link.textContent='Descargar informe';row.append(link);status.append(row);}
+ if(data.error){const row=document.createElement('p');row.textContent=data.error;status.append(row);}
+ const files=$('network-files');files.replaceChildren();for(const item of data.items){const row=document.createElement('p');row.textContent=`${item.metadata.gameName||`Juego #${item.metadata.gameId}`} · ruta ${item.metadata.replayRouteId??'manual'} · ${item.metadata.requests||0} requests · ${item.metadata.kind} `;for(const [kind,label] of [['har','Descargar tráfico'],['manifest','Acciones vinculadas']]){const link=document.createElement('a');link.href=`/api/network/${item.id}/${kind}`;link.textContent=label;row.append(link,document.createTextNode(' · '));}files.append(row);}
+ if(!data.items.length)files.textContent='Todavía no hay HAR descargados. Se guardan al terminar cada recorrido.';
+ }catch(e){toast(e.message,true);}
+}
+$('network-open').addEventListener('click',()=>{$('network-dialog').showModal();renderNetwork();});
+$('network-refresh').addEventListener('click',async()=>{await api('/api/network/sync','POST',{});renderNetwork();});
+$('replay-start').addEventListener('click',async()=>{const button=$('replay-start');button.disabled=true;try{await api('/api/replay/start','POST',{});await renderNetwork();toast('Repitiendo el historial guardado en paralelo. No hace falta volver a marcar.');}catch(e){toast(e.message,true);}finally{button.disabled=false;}});
 
 init();

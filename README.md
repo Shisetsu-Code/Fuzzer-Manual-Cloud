@@ -126,3 +126,14 @@ El ✓ verde con **Último clic** muestra la posición de la acción ejecutada q
 El clic derecho ya no infiere antebet ni envía Space. Marcá con clic derecho el interruptor y después el botón de tirada: se dibujan S1 y S2. Al guardar, esos puntos forman **una sola operación** que pulsa ambas coordenadas, en ese orden, con una pausa de 700 ms. Entre los puntos no se exige reconocer otra pantalla. Los clics izquierdos siguen creando opciones independientes; podés combinarlos con una secuencia en la misma fotografía. Las coordenadas, su orden y los pasos efectivamente enviados quedan guardados. Un fallo incierto no repite el punto automáticamente.
 
 El cargador usa la capacidad libre con una separación de dos segundos entre nuevas cargas del mismo proveedor, conservando los límites de 8 juegos por worker y el buffer de 100. El minuto inicial corresponde a cada juego y transcurre en paralelo. La configuración anterior de un juego por minuto y la serialización por proveedor ya no se usan en este cliente cloud.
+
+
+## Requests, endpoints y payloads (v4)
+
+En la interfaz local, **Requests y HAR → Recuperar requests del historial** recorre automáticamente las ramas y secuencias de clics guardadas en SQLite. Usa sesiones nuevas en los workers GitHub `har4`, hasta 8 juegos por worker. Pausa la preparación normal para dedicar la flota a esta recuperación. El historial original no se modifica y no hace falta volver a marcar las capturas.
+
+Cada ruta produce un HAR 1.2 completo: URL y query, método, encabezados, cookies, `postData` y cuerpos de respuesta terminados. Los frames WebSocket van en un archivo JSONL separado. El registro de acciones incluye marcas originales, orden y hora para relacionarlas con el tráfico. El HAR se escribe al cerrar el contexto; una sesión todavía abierta no tiene un archivo final disponible.
+
+Los archivos se comprimen, verifican por SHA-256, se transfieren por endpoints autenticados a R2 privado y se descargan en `data/network/` de la PC. La ventana permite descargar el HAR y las acciones vinculadas. Los informes persistentes están en `data/replays/` y se pueden exportar desde esa misma ventana. Ninguno de estos datos se publica en GitHub.
+
+Esto **reconstruye tráfico nuevo**. No recupera los requests históricos que nunca se grabaron, ni garantiza los mismos premios aleatorios. Si la pantalla no coincide o faltan coordenadas de una acción antigua, la ruta se detiene y queda parcial con su motivo y el tráfico capturado hasta ese punto. Un clic de resultado incierto no se reenvía automáticamente. El estado `replayed` significa que se enviaron las acciones guardadas y se archivó su HAR; no certifica una compra completa.

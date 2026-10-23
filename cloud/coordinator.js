@@ -1,3 +1,4 @@
+import {networkRoute} from './network-store.js';
 const enc=new TextEncoder();
 const json=(value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const validId=s=>typeof s==='string'&&/^[a-zA-Z0-9_.:-]{1,160}$/.test(s);
@@ -31,6 +32,7 @@ export async function route(request,env){
  if(p==='/health'&&request.method==='GET')return json({ok:true,service:'fuzzer-manual-cloud',protocol:1});
  const workerRoute=p.startsWith('/worker/');
  if(!await authorized(request,workerRoute?env.WORKER_TOKEN:env.CLIENT_TOKEN))return json({error:'Unauthorized'},401);
+ if(p.startsWith('/worker/network/')||p==='/network'||p.startsWith('/network/')){const response=await networkRoute(request,env);if(response)return response;}
  const source=p.match(/^\/worker\/source\/([a-f0-9]{40})$/);
  if(source&&request.method==='GET'){
   const archive=await env.SHOTS.get('runtime/'+source[1]+'.tar');if(!archive)return json({error:'Unknown runtime'},404);
@@ -38,7 +40,7 @@ export async function route(request,env){
  }
  if(p==='/commands'&&request.method==='POST'){
   const v=await body(request);
-  if(!validId(v.id)||!validId(v.clientId)||v.affinity!=null&&!validId(v.affinity)||!v.payload||!['prepare','release','observe'].includes(v.payload.op))throw Error('Invalid command');
+  if(!validId(v.id)||!validId(v.clientId)||v.affinity!=null&&!validId(v.affinity)||!v.payload||!['prepare','release','observe','replay'].includes(v.payload.op))throw Error('Invalid command');
   const bytes=enc.encode(JSON.stringify(v.payload)),digest=await hash(bytes),old=await command(env,v.id);
   if(old)return old.client_id===v.clientId&&old.payload_hash===digest?json({id:old.id,state:old.state}):json({error:'Command identity conflict'},409);
   if(v.affinity){const w=await env.DB.prepare('SELECT heartbeat FROM workers WHERE id=? AND client_id=?').bind(v.affinity,v.clientId).first();

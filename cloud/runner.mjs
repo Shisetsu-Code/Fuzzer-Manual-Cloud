@@ -1,3 +1,5 @@
+import {uploadNetwork} from './network-upload.mjs';
+import {replayRoute} from './replay-route.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {BrowserEngine} from '../src/browser.js';
@@ -9,14 +11,24 @@ if(process.env.GITHUB_ACTIONS!=='true'&&process.env.CLOUD_TEST_WORKER!=='1')thro
 if(process.env.CONFIRM_ADULT!=='true')throw Error('Falta autorización de adulto para demos');
 const endpoint=process.env.CLOUD_URL?.replace(/\/$/,''),token=process.env.CLOUD_WORKER_TOKEN,clientId=process.env.CLOUD_CLIENT_ID;
 if(!/^https:\/\//.test(endpoint||'')||!token||!clientId)throw Error('Falta configuración privada del worker');
-const workerId=`gh-${process.env.GITHUB_RUN_ID||'test'}-${process.env.GITHUB_RUN_ATTEMPT||'1'}-${process.env.WORKER_INDEX||'1'}-sequence3`;
+const workerId=`gh-${process.env.GITHUB_RUN_ID||'test'}-${process.env.GITHUB_RUN_ATTEMPT||'1'}-${process.env.WORKER_INDEX||'1'}-har4`;
 const capacity=Number(process.env.GAMES_PER_WORKER||8);if(!Number.isInteger(capacity)||capacity<1||capacity>8)throw Error('Capacidad inválida');
 const budget=Number(process.env.WORKER_MINUTES||60);if(!Number.isInteger(budget)||budget<1||budget>300)throw Error('Duración inválida');
-const config={...loadConfig(),headless:true,retainRoots:true,initialLoadWaitMs:60000,maxLive:capacity,gpuMode:'default',dataDir:path.resolve('.local',workerId),transitionTimeoutMs:600000};
+const config={...loadConfig(),headless:true,captureNetwork:true,retainRoots:true,initialLoadWaitMs:60000,maxLive:capacity,gpuMode:'default',dataDir:path.resolve('.local',workerId),transitionTimeoutMs:600000};
 const tasks=new Map(),lineages=new Map(),db={getTask:id=>tasks.get(id),lineage:id=>lineages.get(id)||[]};
 const engine=new BrowserEngine(config,db,{chromiumLoader:async()=>{
  const {chromium}=await import('playwright');return {chromium:{launch:options=>chromium.launch({...options,channel:'chrome',args:[...(options.args||[]),'--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']})}};
 }});
+const pendingArchives=new Set();
+engine.onArchive=async session=>{
+ const metadata={kind:'har',gameId:session.gameId??null,gameName:session.gameName??null,sourceTaskId:session.taskId??null,replayJobId:session.replayJobId??null,replayRouteId:session.replayRouteId??null,url:session.url,actions:session.actionLog||[],requests:session.httpCount||0,recordedAt:new Date().toISOString(),harCloseError:session.harCloseError||null};
+ try{
+  session.networkArchives||=[];
+  if(!session.networkArchives.some(a=>a.metadata.kind==='har'))session.networkArchives.push(await uploadNetwork(session.harPath,metadata,{endpoint,token,workerId,clientId}));
+  if(session.wsCount&&!session.networkArchives.some(a=>a.metadata.kind==='websocket'))session.networkArchives.push(await uploadNetwork(session.wsPath,{...metadata,kind:'websocket',frames:session.wsCount},{endpoint,token,workerId,clientId}));
+  pendingArchives.delete(session);session.networkArchiveError=null;await fs.rm(session.harPath,{force:true});if(session.wsCount)await fs.rm(session.wsPath,{force:true});
+ }catch(e){session.networkArchiveError=String(e.message).slice(0,160);pendingArchives.add(session);console.log(JSON.stringify({event:'network_archive_pending'}));}
+};
 const baseClick=engine.clickMark.bind(engine),baseShot=engine.screenshot.bind(engine);
 engine.clickMark=async(session,capture,mark,options)=>{
  const kind=classifyMark(capture,mark).kind,control=controlForMark(capture,mark);
@@ -44,7 +56,8 @@ async function execute(command){
  try{
   await call(`/worker/${command.id}/start`,identity);
   let result,image;
-  if(command.payload.op==='release'){await engine.release(command.payload.taskId);result={released:true};}
+  if(command.payload.op==='replay'){result=await replayRoute(engine,command.payload.route);}
+  else if(command.payload.op==='release'){await engine.release(command.payload.taskId);result={released:true};}
   else if(command.payload.op==='observe'){
    let session=engine.live.get(command.payload.taskId);
    if(!session&&command.payload.rootTask){
@@ -83,4 +96,4 @@ try{
   await new Promise(r=>setTimeout(r,700));
  }
  await Promise.allSettled(active);
-}finally{clearInterval(timer);await engine.stop();await heartbeat().catch(()=>{});}
+}finally{await engine.stop();for(const session of pendingArchives)await engine.onArchive(session);clearInterval(timer);await heartbeat().catch(()=>{});}

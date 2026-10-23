@@ -1,3 +1,8 @@
+import {createReadStream} from 'node:fs';
+import {pipeline} from 'node:stream/promises';
+import {createGunzip} from 'node:zlib';
+import {NetworkClient} from './network-client.js';
+import {ReplayManager} from './replay-manager.js';
 import './cloud-env.js';
 import http from 'node:http';
 import fs from 'node:fs/promises';
@@ -29,7 +34,10 @@ const scheduler=new Scheduler({db,browser,cache,workers:config.workers,rootWorke
 // Only recover local polling. Remote commands retain their immutable IDs.
 db.db.prepare("UPDATE tasks SET status='queued' WHERE status='preparing'").run();
 await browser.start();
-db.setSetting('fleet-runtime','sequence3');
+const network=new NetworkClient(config,browser.client);await network.start();
+const replays=new ReplayManager({config,db,browser,network,scheduler});await replays.init();
+const networkTimer=setInterval(()=>network.sync(),10000);networkTimer.unref();
+db.setSetting('fleet-runtime','har4');
 const recovery=new FleetRecovery({db,browser,launch:launchFleet});
 const recoveryTimer=setInterval(()=>recovery.tick().catch(e=>{recovery.error=e.message;}),10000);recoveryTimer.unref();
 // Reattach outstanding read-only observations when updating the local client.
@@ -65,7 +73,24 @@ async function handler(req,res){
       const [file,mime]=staticPaths.get(p);const content=await fs.readFile(path.join(publicDir,file));
       res.writeHead(200,{'Content-Type':mime,'Content-Length':content.length,'Cache-Control':'no-cache'});res.end(content);return;
     }
-    if(req.method==='GET'&&p==='/api/status')return json(res,200,{...scheduler.status(),cloud:{version:'sequence3',clientId:browser.client.clientId,workers:browser.workers,operations:[...browser.operations.values()],refreshingTasks:[...refreshingTasks],error:browser.lastError||recovery.error,launching:recovery.busy||!browser.workers.length&&Date.now()-db.getSetting('last-fleet-start',0)<120000}});
+    if(req.method==='GET'&&p==='/api/status')return json(res,200,{...scheduler.status(),cloud:{version:'har4',networkArchives:network.items.size,replays:replays.list(),clientId:browser.client.clientId,workers:browser.workers,operations:[...browser.operations.values()],refreshingTasks:[...refreshingTasks],error:browser.lastError||recovery.error,launching:recovery.busy||!browser.workers.length&&Date.now()-db.getSetting('last-fleet-start',0)<120000}});
+    if(req.method==='GET'&&p==='/api/network')return json(res,200,{items:network.list(),syncing:network.syncing,error:network.error,replays:replays.list()});
+    if(req.method==='POST'&&p==='/api/network/sync'){network.sync();return json(res,202,{ok:true});}
+    if(req.method==='POST'&&p==='/api/replay/start'){
+      const job=await replays.start();
+      if(!browser.workers.some(w=>w.id.endsWith('-har4'))&&Date.now()-db.getSetting('last-fleet-start',0)>120000){
+        db.setSetting('last-fleet-start',Date.now());await launchFleet(browser.client.clientId,{workers:4,gamesPerWorker:8,minutes:120});
+      }
+      return json(res,202,job);
+    }
+    const replayReport=p.match(/^\/api\/replay\/([\w-]+)\/report$/);
+    if(req.method==='GET'&&replayReport){const job=replays.jobs.get(replayReport[1]);if(!job)return json(res,404,{error:'Replay not found'});res.setHeader('Content-Disposition',`attachment; filename="replay-${job.id}.json"`);return json(res,200,job);}
+    const archive=p.match(/^\/api\/network\/([\w-]+)\/(har|manifest)$/);
+    if(req.method==='GET'&&archive){const item=network.items.get(archive[1]);if(!item)return json(res,404,{error:'Archive not found'});
+      if(archive[2]==='manifest'){res.setHeader('Content-Disposition',`attachment; filename="${item.id}-acciones.json"`);const {file,...manifest}=item;return json(res,200,manifest);}
+      const ext=item.metadata.kind==='websocket'?'ws.jsonl':'har';res.writeHead(200,{'Content-Type':'application/json','Content-Disposition':`attachment; filename="${item.id}.${ext}"`,'Cache-Control':'no-store'});
+      await pipeline(createReadStream(item.file),createGunzip(),res);return;
+    }
     if(req.method==='GET'&&p==='/api/providers')return json(res,200,{providers:Object.entries(PROVIDERS).map(([id,[name]])=>({id,name,...db.providerBuffer()[id]})),limits:{intervalMs:60000,maxGames:100,maxCaptures:100}});
     if(req.method==='GET'&&p==='/api/progress')return json(res,200,{games:db.gameProgress()});
     if(req.method==='GET'&&p==='/api/history/export'){
@@ -143,6 +168,6 @@ server.listen(config.port,config.host,()=>{
   scheduler.start();
   console.log('Capturas y clasificación locales; navegadores en GitHub.');
 });
-async function close(){clearInterval(recoveryTimer);scheduler.setPause(true);scheduler.stop();server.close();await browser.stop();db.close();}
+async function close(){clearInterval(recoveryTimer);clearInterval(networkTimer);replays.stop();scheduler.setPause(true);scheduler.stop();server.close();await browser.stop();db.close();}
 let shuttingDown=false;
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{if(!shuttingDown){shuttingDown=true;close().finally(()=>process.exit(0));}});

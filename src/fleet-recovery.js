@@ -3,7 +3,7 @@ export class FleetRecovery {
  async tick(){
   if(this.busy||!this.db.getSetting('fleet-recovery-enabled',true)||!this.browser.pending.size)return;
   const options=this.db.getSetting('fleet-options',{workers:4,gamesPerWorker:8,minutes:60});
-  const runtime=this.db.getSetting('fleet-runtime',null),available=runtime==='sequence3'?this.browser.workers.filter(w=>w.id.endsWith('-sequence3')).length:this.browser.workers.length;
+  const runtime=this.db.getSetting('fleet-runtime',null),available=['sequence3','har4'].includes(runtime)?this.browser.workers.filter(w=>w.id.endsWith('-'+runtime)).length:this.browser.workers.length;
   const missing=options.workers-available;
   if(missing<=0||this.now()-this.db.getSetting('last-fleet-start',0)<180000)return;
   this.busy=true;this.db.setSetting('last-fleet-start',this.now());
