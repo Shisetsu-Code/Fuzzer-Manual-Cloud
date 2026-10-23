@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const DEFAULT_KEYS={next:'Space',previous:'Shift+Space',undo:'KeyZ',skip:'KeyS',pause:'KeyP',finish:'KeyF'};
 const KEY_LABELS={next:'Guardar y siguiente',previous:'Ver anterior',undo:'Deshacer',skip:'Cerrar rama',pause:'Pausar preparación',finish:'Finalizar juego'};
-const store={providerFilter:'',focusGameId:null,focusGameName:'',markCaptureVersion:null,saveError:'',items:[],selectedId:null,marks:[],features:{},progress:null,history:[],review:null,optimistic:new Set(),imageKeep:new Map(),hotkeys:{...DEFAULT_KEYS},serverRefreshing:new Set(),saving:new Set(),remoteOperations:new Map(),waitErrors:new Map(),refreshing:new Set(),running:false,remoteOnline:false,pollBusy:false};
+const store={providerFilter:'',focusGameId:null,focusGameName:'',markCaptureVersion:null,saveErrorTaskId:null,saveError:'',items:[],selectedId:null,marks:[],features:{},progress:null,history:[],review:null,optimistic:new Set(),imageKeep:new Map(),hotkeys:{...DEFAULT_KEYS},serverRefreshing:new Set(),saving:new Set(),remoteOperations:new Map(),waitErrors:new Map(),refreshing:new Set(),running:false,remoteOnline:false,pollBusy:false};
 let toastTimer;
 function toast(text,isError=false){const node=$('toast');node.textContent=text;node.className=isError?'error':'';node.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.style.display='none',3000);}
 function problemText(error){
@@ -207,12 +207,12 @@ async function commit(skip=false){
  if(captureWaiting(item.id))return toast('La captura se está actualizando. Tus marcas siguen guardadas aquí.',true);
  const marks=skip?[]:[...store.marks];store.markCaptureVersion??=item.capture?.capturedAt??null;store.saving.add(item.id);renderCaptureWait();
  try{
-  const result=await api(`/api/tasks/${item.id}/commit`,'POST',{marks,captureVersion:store.markCaptureVersion});
-  store.saveError='';store.history.push({...item,savedMarks:marks.map((m,i)=>({...m,kind:m.kind==='ordered'?'ordered':result.children[i]?.kind||m.kind}))});if(store.history.length>100)store.history.shift();
+  const result=await api(`/api/tasks/${item.id}/commit`,'POST',{marks,captureVersion:marks.length?store.markCaptureVersion:item.capture?.capturedAt});
+  store.saveError='';store.markCaptureVersion=null;store.history.push({...item,savedMarks:marks.map((m,i)=>({...m,kind:m.kind==='ordered'?'ordered':result.children[i]?.kind||m.kind}))});if(store.history.length>100)store.history.shift();
   store.focusGameId=marks.length?item.game_id:null;store.focusGameName=item.name||item.slug;
   store.items=store.items.filter(t=>t.id!==item.id);store.selectedId=null;store.marks=[];store.progressAt=0;selectFirst();display();await refresh();
  }catch(e){
-  store.saveError=`No se guardó #${item.id}: ${e.message}. Tus marcas se conservaron.`;store.selectedId=item.id;if(!store.items.some(i=>i.id===item.id))store.items.unshift(item);store.marks=marks;
+  store.saveErrorTaskId=item.id;store.saveError=`No se guardó #${item.id}: ${e.message}. Tus marcas se conservaron.`;store.selectedId=item.id;if(!store.items.some(i=>i.id===item.id))store.items.unshift(item);store.marks=marks;
   toast(`No se guardó #${item.id}: ${e.message}. Tus marcas se conservaron.`,true);await refresh();
  }finally{store.saving.delete(item.id);display();}
 }
@@ -303,7 +303,7 @@ function renderCaptureWait(){
  if(item&&store.saving.has(item.id)){$('save-btn').disabled=true;$('skip-btn').disabled=true;$('finish-btn').disabled=true;}
  $('cloud-refresh').disabled=!item||!!store.review||busy;$('cloud-wait').disabled=!item||!!store.review||busy;
  $('cloud-wait').textContent=busy?(store.remoteOperations.get(item.id)?.state==='queued'?'Esperando worker libre…':'Esperando nueva captura…'):'Sigue cargando · esperar y capturar';
- if(store.saveError){$('live-note').hidden=false;$('live-note').textContent=store.saveError;}
+ if(store.saveError&&(!store.saveErrorTaskId||store.saveErrorTaskId===item?.id)){$('live-note').hidden=false;$('live-note').textContent=store.saveError;}
  if(item&&store.marks.length&&store.markCaptureVersion&&store.markCaptureVersion!==item.capture?.capturedAt){$('save-btn').disabled=true;$('live-note').hidden=false;$('live-note').textContent='La captura cambió. Tus marcas anteriores se conservaron; limpiá y volvé a marcar sobre la imagen nueva antes de guardar.';}
  const waitError=item&&store.waitErrors.get(item.id);if(waitError){$('live-note').hidden=false;$('live-note').textContent=`No llegó una captura nueva: ${waitError}. La imagen visible es la anterior.`;}
  if(busy){$('save-btn').disabled=true;$('skip-btn').disabled=true;$('finish-btn').disabled=true;}

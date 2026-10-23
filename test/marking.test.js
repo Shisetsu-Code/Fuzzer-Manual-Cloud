@@ -135,3 +135,8 @@ test('executed click indicators are green and text action lists stay hidden',()=
 });
 
 
+
+test('closing a branch without marks uses its current capture version instead of an earlier game version',async()=>{
+ let body;const {context,state,commit}=ui(async(url,options)=>{body=JSON.parse(options.body);return {ok:true,json:async()=>({children:[]})};});context.refresh=async()=>{};
+ state.items=[{id:274,game_id:24,slug:'game',provider:'test',capture:{capturedAt:'current'}}];state.selectedId=274;state.markCaptureVersion='old-other-game';state.marks=[];await commit(true);assert.equal(body.captureVersion,'current');assert.equal(state.markCaptureVersion,null);assert.equal(state.saveError,'');
+});
