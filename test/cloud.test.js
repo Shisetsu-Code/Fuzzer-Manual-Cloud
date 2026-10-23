@@ -117,3 +117,9 @@ test('read-only polling survives a transient relay outage without submitting an 
  const client={read:async()=>{if(++reads===1)throw Error('D1 network');return {state:'done',workerId:'w',result:{capture:{},live:true}};},call:async()=>new Response(new Uint8Array([255,216,255,217]))};
  const browser=new RemoteBrowser({dataDir:dir},{},{client,sleep:async()=>{}});const result=await browser.waitForResult('poll-only',{id:77});assert.equal(reads,2);assert.equal(result.live,true);assert.equal(browser.pending.size,0);assert.equal(browser.operations.size,0);
 });
+
+test('resuming an immutable operation after an upgrade reattaches to the original result on identity conflict',async t=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cloud-reattach-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));let submits=0;
+ const client={clientId:'pc',submit:async()=>{submits++;throw Error('Command identity conflict');},read:async()=>({state:'done',workerId:'original',result:{live:true,capture:{initialLoadWaitApplied:true,actionApplied:true}}}),call:async()=>new Response(new Uint8Array([255,216,255,217]))};
+ const browser=new RemoteBrowser({dataDir:dir},{getTask:()=>null,lineage:()=>[]},{client});const result=await browser.prepare({id:45});assert.equal(submits,1);assert.equal(result.capture.remoteWorker,'original');assert.equal(browser.metrics.commandReattachments,1);
+});

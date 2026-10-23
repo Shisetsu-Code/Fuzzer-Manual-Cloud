@@ -54,7 +54,8 @@ export class RemoteBrowser {
   const lineage=this.db.lineage(task.id).map(s=>({parent:taskData(s.parent),mark:s.mark}));
   const id=`${this.client.clientId}:task:${task.id}`;
   try{
-  await this.client.submit(id,{op:'prepare',task:taskData(task),lineage},affinity);
+  try{await this.client.submit(id,{op:'prepare',task:taskData(task),lineage},affinity);}catch(e){if(!/Command identity conflict/i.test(e.message))throw e;this.metrics.commandReattachments=(this.metrics.commandReattachments||0)+1;}
+  // A task identity survives client upgrades: read its original operation rather than replacing or replaying it.
   const prepared=await this.waitForResult(id,task);
   if(!task.parent_task_id&&prepared.live&&!prepared.capture.initialLoadWaitApplied){
    const waitId=`${this.client.clientId}:initial-wait:${task.id}`;
