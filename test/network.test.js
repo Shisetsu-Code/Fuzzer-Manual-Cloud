@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import {gunzipSync} from 'node:zlib';
+import {gunzipSync,gzipSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import {CatalogDB} from '../src/db.js';
 import {buildReplayPlan} from '../src/replay-plan.js';
 import {NetworkClient} from '../src/network-client.js';
@@ -56,6 +57,15 @@ test('concurrent downloads share the same operation and keep corruption out of e
  const results=await Promise.allSettled([network.download('archive'),network.download('archive')]);
  assert.ok(results.every(r=>r.status==='rejected'&&/checksum/.test(r.reason.message)));assert.equal(reads,2);assert.equal(network.items.size,0);
  await assert.rejects(()=>fs.stat(path.join(dir,'network','archive.har.gz')));
+});
+
+test('parallel archive parts are reassembled in order even when responses arrive out of order',async t=>{
+ const dir=await directory(t),original=JSON.stringify({log:{entries:[]}}),gzip=gzipSync(original),width=Math.ceil(gzip.length/3),chunks=[0,1,2].map(i=>gzip.subarray(i*width,(i+1)*width));let active=0,maximum=0;
+ const client={clientId:'pc',call:async(route,options)=>{
+  if(!options?.raw)return {metadata:{kind:'har'},parts:chunks.map(chunk=>({size:chunk.length,sha256:createHash('sha256').update(chunk).digest('hex')}))};
+  const index=Number(route.match(/part\/(\d+)/)[1]);active++;maximum=Math.max(maximum,active);await new Promise(resolve=>setTimeout(resolve,(3-index)*10));active--;return new Response(chunks[index]);
+ }};
+ const network=new NetworkClient({dataDir:dir},client);await network.start();const item=await network.download('parallel');assert.equal(maximum,3);assert.equal(gunzipSync(await fs.readFile(item.file)).toString(),original);assert.ok(item.requestFile);
 });
 
 test('replay restart polls the same immutable command and never resends uncertain actions',async t=>{
