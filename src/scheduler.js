@@ -2,7 +2,7 @@ export class Scheduler {
   constructor({db,browser,cache,workers=3,rootWorkers=0,providerIds=[],previewCount=50,readyGamesTarget=20,eligibleRoot=()=>true,providerLimits=null,onProgress=()=>{}}){
     this.db=db;this.browser=browser;this.cache=cache;this.workers=workers;
     this.previewCount=previewCount;this.onProgress=onProgress;
-    this.active=new Set();this.activeRoots=new Set();this.readyGamesTarget=readyGamesTarget;this.errors=[];this.paused=db.getSetting('paused',true);this.timer=null;
+    this.retryAfter=new Map();this.capacityWaits=0;this.active=new Set();this.activeRoots=new Set();this.readyGamesTarget=readyGamesTarget;this.errors=[];this.paused=db.getSetting('paused',true);this.timer=null;
     this.preloadActive=false;this.closed=false;this.recoveries=0;this.eligibleRoot=eligibleRoot;this.providerLimits=providerLimits;this.rootWorkers=rootWorkers;this.rootProviders=new Set();
     this.providerIds=providerIds;
   }
@@ -14,7 +14,7 @@ export class Scheduler {
     while(this.active.size<this.workers+this.rootWorkers){
       const buffer=this.db.bufferState();
       const counts=this.db.providerBuffer();
-      const allowed=x=>!this.providerLimits||this.providerLimits.allowed(x,counts);
+      const allowed=x=>Date.now()>=(this.retryAfter.get(x.id)||0)&&(!this.providerLimits||this.providerLimits.allowed(x,counts));
       const continuation=(!this.rootWorkers||this.active.size-this.activeRoots.size<this.workers)
         ?this.db.queuedBatch(20000).find(x=>x.parent_task_id&&allowed(x)&&!this.active.has(x.id)&&this.browser.canPrepare(x)):null;
       const root=(!this.rootWorkers||this.activeRoots.size<this.rootWorkers)&&(this.providerLimits||buffer.coveredGames<this.readyGamesTarget)
@@ -27,7 +27,7 @@ export class Scheduler {
       this.providerLimits?.reserve(task);
       this.active.add(task.id);
       if(!task.parent_task_id){this.activeRoots.add(task.id);if(this.rootWorkers)this.rootProviders.add(task.provider||'pragmatic');}
-      this.execute(task).finally(()=>{this.active.delete(task.id);this.activeRoots.delete(task.id);if(!task.parent_task_id)this.rootProviders.delete(task.provider||'pragmatic');this.pump();});
+      this.execute(task).finally(()=>{this.active.delete(task.id);this.activeRoots.delete(task.id);if(!task.parent_task_id)this.rootProviders.delete(task.provider||'pragmatic');setImmediate(()=>this.pump());});
     }
   }
   async execute(task){
@@ -43,7 +43,7 @@ export class Scheduler {
       this.warmup();
     }catch(e){
       const code=e.code||e.message||'UNKNOWN';
-      if(code==='LIVE_SLOTS_FULL'||code==='LIVE_SESSION_BUSY'){this.db.fail(task.id,'queued',String(e.message));return;}
+      if(code==='LIVE_SLOTS_FULL'||code==='LIVE_SESSION_BUSY'){this.retryAfter.set(task.id,Date.now()+1500);this.capacityWaits++;this.db.fail(task.id,'queued',String(e.message));return;}
       const status=this.browser.hasLive?.(task.id)||['LIVE_SESSION_LOST','STATE_MISMATCH','CONTROL_MISSING','UNVERIFIED_COORDINATE','VISUAL_STATE_MISMATCH','BUY_MENU_NOT_REOPENED','RUNTIME_UNAVAILABLE','CLICK_OUTSIDE_DEMO'].includes(code)?'blocked':'failed';
       this.db.fail(task.id,status,String(e.message||e));
       this.errors.push({taskId:task.id,reason:String(e.message||e).slice(0,180)});
@@ -70,6 +70,6 @@ export class Scheduler {
       return {provider,state,pending,waitSeconds:Math.ceil(waitMs/1000),games:count.games||0,captures:count.captures||0};
     });
   }
-  status(){return {paused:this.paused,active:this.active.size,workers:this.workers,rootWorkers:this.rootWorkers,providerWorkers:this.providerWorkers(),activeRoots:this.activeRoots.size,activeProviders:[...this.rootProviders],live:this.browser.liveCount(),maxLive:this.browser.config.maxLive,recoveries:this.recoveries,providers:this.db.providerBuffer(),limits:this.providerLimits?{intervalMs:this.providerLimits.intervalMs,maxGames:this.providerLimits.maxGames,maxCaptures:this.providerLimits.maxCaptures}:null,buffer:{...this.db.bufferState(),target:this.readyGamesTarget},
+  status(){return {capacityWaits:this.capacityWaits,paused:this.paused,active:this.active.size,workers:this.workers,rootWorkers:this.rootWorkers,providerWorkers:this.providerWorkers(),activeRoots:this.activeRoots.size,activeProviders:[...this.rootProviders],live:this.browser.liveCount(),maxLive:this.browser.config.maxLive,recoveries:this.recoveries,providers:this.db.providerBuffer(),limits:this.providerLimits?{intervalMs:this.providerLimits.intervalMs,maxGames:this.providerLimits.maxGames,maxCaptures:this.providerLimits.maxCaptures}:null,buffer:{...this.db.bufferState(),target:this.readyGamesTarget},
     db:this.db.stats(),cache:this.cache.stats(),browser:this.browser.metrics,errors:this.errors.slice(-5)};}
 }

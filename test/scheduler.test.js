@@ -111,3 +111,11 @@ test('each provider prepares independently of the four classification workers',a
   assert.equal(db.stats().tasks.ready,5);
  }finally{scheduler?.stop();releases.forEach(fn=>fn());for(let i=0;i<100&&scheduler?.active.size;i++)await new Promise(r=>setTimeout(r,2));db.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('a synchronous full-slot response yields to the event loop instead of freezing the local UI',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'fm-backpressure-')),db=new CatalogDB(dir);let scheduler,calls=0;
+ try{db.importUrls([A]);const browser={canPrepare:()=>true,liveCount:()=>0,config:{maxLive:1},metrics:{},async prepare(){calls++;throw Error('LIVE_SLOTS_FULL');}};
+ scheduler=new Scheduler({db,browser,cache:new ImageCache(16),workers:1});scheduler.start();scheduler.setPause(false);
+ await new Promise(r=>setTimeout(r,50));assert.equal(calls,1);assert.equal(db.stats().tasks.queued,1);assert.equal(scheduler.status().capacityWaits,1);
+ }finally{scheduler?.stop();db.close();fs.rmSync(dir,{recursive:true,force:true});}
+});
