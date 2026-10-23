@@ -34,5 +34,5 @@ test('a generic antebet remains pending and recovery never toggles it twice',asy
   const engine=new BrowserEngine({},null),session={url:'https://demo.bgaming-network.com/play/Test/FUN?server=demo',page:{keyboard:{press:async key=>{assert.equal(key,'Space');spins++;}}}};let clicks=0,spins=0;
   engine.clickMark=async(s,c,m,{onStarted})=>{clicks++;onStarted();};engine.waitForGameReady=async()=>({state:'UNKNOWN'});
   await engine.runAntebet(session,{},{});await engine.runAntebet(session,{},{});
-  assert.equal(clicks,1);assert.equal(spins,1);assert.equal(session.antebetFlow.phase,'wait-spin');
+  assert.equal(clicks,1);assert.equal(spins,0);assert.equal(session.antebetFlow.phase,'verify');
 });

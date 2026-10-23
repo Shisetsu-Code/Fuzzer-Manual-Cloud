@@ -14,7 +14,7 @@
     <div class="top-stats"><span><b id="stat-ready">0/20</b> juegos preparados</span><span id="buffer-note"></span></div>
     <div class="head-actions"><button id="progress-open">Registro</button><button id="import-open" class="primary">+ Importar URLs</button><button id="pause-btn">Iniciar workers</button><button id="settings-open" title="Atajos configurables">⚙ Configurar</button></div>
   </header>
-  <section class="cloud-controls">
+  <section class="cloud-controls"><strong id="app-version">v3 · Secuencias S1 → S2</strong>
     <label>Workers <input id="cloud-workers" type="number" min="1" max="20" value="4"></label>
     <label>Juegos por worker <input id="cloud-games" type="number" min="1" max="8" value="8"></label>
     <label>Duración (min) <input id="cloud-minutes" type="number" min="5" max="300" value="60"></label>
@@ -34,7 +34,7 @@
         <div id="empty" class="empty-state"><span class="big-icon">▧</span><h2>Capturas listas para catalogar</h2><p>Los navegadores trabajan por separado. Una vez preparada, cada fotografía aparece aquí sin esperas de carga.</p></div>
         <div id="image-wrap" class="image-wrap" hidden><img id="shot" alt="Captura del juego DEMO" draggable="false"><div id="pins" class="pins"></div></div>
       </div>
-      <div class="click-legend"><span class="executed-legend">✓ Verde: clic ya ejecutado aquí</span><span class="pending-legend">● Azul: marca nueva sin ejecutar</span></div><div class="photo-footer"><span id="cursor" hidden></span><span id="marks-count">0 clics</span><span id="hint">Clic para marcar · Espacio para guardar y avanzar</span></div>
+      <div class="click-legend"><span class="executed-legend">✓ Verde: clic ya ejecutado aquí</span><span class="pending-legend">● Azul: marca nueva · S1 → S2: clics derechos en orden</span></div><div class="photo-footer"><span id="cursor" hidden></span><span id="marks-count">0 clics</span><span id="hint">Clic para marcar · Espacio para guardar y avanzar</span></div>
       <div class="bottom-bar"><button id="previous-btn">← Anterior</button><button id="undo-btn">Deshacer <kbd>Z</kbd></button><button id="skip-btn" title="Cierra solo este camino">Cerrar rama <kbd>S</kbd></button><button id="finish-btn" title="Disponible cuando no quedan otros caminos pendientes del juego">Finalizar juego <kbd>F</kbd></button><button id="save-btn" class="primary large">Guardar y siguiente <kbd>Espacio</kbd> →</button></div>
     </section>
     <aside class="inspector">

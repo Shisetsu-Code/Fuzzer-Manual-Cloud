@@ -44,8 +44,11 @@ export function normalizeMarks(marks) {
   return marks.map((m,i)=>{
     if (!m || !Number.isFinite(m.x) || !Number.isFinite(m.y) || m.x<0 || m.x>1 || m.y<0 || m.y>1) throw Error(`Invalid normalized coordinate at mark ${i+1}`);
     const kind=String(m.kind||'navigate');
-    if(!['click','navigate','buy','antebet','antebet_toggle','confirm','pick','continue','spin','other'].includes(kind))throw Error(`Invalid action kind: ${kind}`);
-    return {x:Math.round(m.x*1000000)/1000000,y:Math.round(m.y*1000000)/1000000,kind,label:String(m.label||'').trim().slice(0,80)};
+    if(!['click','navigate','buy','antebet','antebet_toggle','confirm','pick','continue','spin','other','ordered','sequence'].includes(kind))throw Error(`Invalid action kind: ${kind}`);
+    if(kind==='sequence'&&(!Array.isArray(m.steps)||m.steps.some(point=>['sequence','ordered'].includes(point?.kind))))throw Error('Nested sequences are not supported');
+    const steps=kind==='sequence'?normalizeMarks(m.steps||[]).map(point=>({...point,kind:'click'})):null;
+    if(kind==='sequence'&&(!steps.length||steps.length>40))throw Error('Invalid sequence');
+    return {...(steps?{steps}:{}),x:Math.round(m.x*1000000)/1000000,y:Math.round(m.y*1000000)/1000000,kind,label:String(m.label||'').trim().slice(0,80)};
   });
 }
-export function isIrreversible(kind){return ['click','buy','antebet','antebet_toggle','confirm','pick','continue','spin'].includes(kind);}
+export function isIrreversible(kind){return ['sequence','ordered','click','buy','antebet','antebet_toggle','confirm','pick','continue','spin'].includes(kind);}

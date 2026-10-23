@@ -14,7 +14,7 @@ export function captureState(capture){
 }
 export function classifyMark(capture,mark){
   // The operator's right-click denotes a compound antebet test, not a purchase.
-  if(mark.kind==='antebet')return {...mark};
+  if(['antebet','sequence','ordered'].includes(mark.kind))return {...mark};
   const control=controlForMark(capture,mark);
   const p=control?.path||'';
   let kind=mark.kind||'navigate';

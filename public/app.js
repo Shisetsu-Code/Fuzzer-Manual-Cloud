@@ -56,7 +56,7 @@ function display(){
     $('photo-status').textContent=review?'REVISIÓN':item.capture?.entryReview?'Acceso pendiente':item.capture?.manualReview?(item.capture?.gameRunning?'Juego iniciado':item.capture?.gameRunning===false?'Inicio pendiente':'Revisión manual'):({BASE:'Base',BUY_MENU:'Compras',CONFIRM:'Confirmación',BONUS:'Bonus'}[item.capture?.state]||'Captura');
     const url=imageUrl(item);if($('shot').getAttribute('src')!==url)$('shot').src=url;
   }
-  $('viewport').classList.toggle('readonly',review);$('hint').textContent=review?'Captura anterior · Espacio para volver':'Clic: marcar · Derecho: antebet · Espacio: guardar';
+  $('viewport').classList.toggle('readonly',review);$('hint').textContent=review?'Captura anterior · Espacio para volver':'Izquierdo: opción independiente · Derecho: secuencia 1 → 2 → 3';
   const antebetWarning=antebetNotice(item?.capture);
   $('live-note').hidden=!antebetWarning&&!item?.capture?.manualReview;
   $('live-note').textContent=antebetWarning||item?.capture?.manualReason||(item?.capture?.entryReview?'Acceso a demo pendiente. Marcá dónde abrir el juego o cerrá la rama.':item?.capture?.manualReview?(item.capture?.gameRunning?'Juego iniciado. Marcá las opciones que quieras analizar.':'No pude confirmar el inicio. Marcá dónde continuar o cerrá la rama.'):'');
@@ -99,9 +99,9 @@ function downloadHistory(format){
   const link=document.createElement('a');link.href='/api/history/export?'+params;link.download=`historial-${$('history-provider').value||'todos'}.${format}`;document.body.append(link);link.click();link.remove();
 }
 function renderPins(){
-  const pins=$('pins');pins.replaceChildren();const marks=store.review?.savedMarks||store.marks;
-  if(!store.review)for(const m of getCurrent()?.previousClicks||[]){const el=document.createElement('div');el.className='pin previous-click';el.style.left=`${m.x*100}%`;el.style.top=`${m.y*100}%`;el.textContent='✓';if(m.lastAction&&!m.sameScreen){const badge=document.createElement('span');badge.className='last-click-label';badge.textContent='Último clic';el.append(badge);}el.title=`${m.lastAction?'Último clic ejecutado (posición en la pantalla anterior). ':''}${m.label} ya ejecutado · operación #${m.id}${m.onRoute?' · esta ruta':' · otra ruta'}`;pins.append(el);}
-  marks.forEach((m,i)=>{const el=document.createElement('div');el.className='pin'+(m.kind==='antebet'?' antebet':'');el.style.left=`${m.x*100}%`;el.style.top=`${m.y*100}%`;el.textContent=(m.kind==='antebet'?'A':'')+String(i+1);el.title=m.label||`Clic ${i+1}`;pins.append(el);});
+  const pins=$('pins');pins.replaceChildren();const marks=(store.review?.savedMarks||store.marks).flatMap(m=>m.kind==='sequence'?(m.steps||[]).map(point=>({...point,kind:'ordered'})):[m]);let sequenceOrdinal=0;
+  if(!store.review)for(const m of getCurrent()?.previousClicks||[]){const el=document.createElement('div');el.className='pin previous-click';el.style.left=`${m.x*100}%`;el.style.top=`${m.y*100}%`;el.textContent=m.sequenceIndex?`✓${m.sequenceIndex}`:'✓';if(m.lastAction&&!m.sameScreen){const badge=document.createElement('span');badge.className='last-click-label';badge.textContent='Último clic';el.append(badge);}el.title=`${m.lastAction?'Último clic ejecutado (posición en la pantalla anterior). ':''}${m.label} ya ejecutado · operación #${m.id}${m.onRoute?' · esta ruta':' · otra ruta'}`;pins.append(el);}
+  marks.forEach((m,i)=>{const el=document.createElement('div');el.className='pin'+(m.kind==='antebet'?' antebet':'');el.style.left=`${m.x*100}%`;el.style.top=`${m.y*100}%`;el.textContent=m.kind==='ordered'?`S${++sequenceOrdinal}`:(m.kind==='antebet'?'A':'')+String(i+1);el.title=m.label||(m.kind==='ordered'?`Secuencia: paso ${sequenceOrdinal}`:`Clic ${i+1}`);pins.append(el);});
   $('marks-count').textContent=`${store.review?0:(getCurrent()?.previousClicks?.length||0)} clics realizados aquí · ${marks.length} marcas nuevas`;
   const list=$('mark-list');list.replaceChildren();
   const item=getCurrent(),game=store.progress?.find(g=>g.id===item?.game_id);
@@ -147,6 +147,7 @@ function renderQueue(){
   }
 }
 function renderStatus(status){
+  $('app-version').textContent=`v3 · S1 → S2 · ${(status.cloud?.workers||[]).filter(w=>w.id.endsWith('-sequence3')).length} workers actualizados`;
   store.serverRefreshing=new Set(status.cloud?.refreshingTasks||[]);
   store.remoteOperations=new Map((status.cloud?.operations||[]).map(op=>[op.taskId,op]));
   const lanes=status.providerWorkers||[];
@@ -190,6 +191,7 @@ function addMark(e,kind){
   if(captureWaiting(getCurrent()?.id))return;
   if(store.review||!getCurrent())return;
   if(kind==='click'&&!store.features.freeClicks)return toast('Los clics libres se activarán al reiniciar el servidor actualizado.',true);
+  if(kind==='ordered'&&!store.features.orderedSequence)return toast('Actualizá la interfaz para habilitar secuencias de coordenadas.',true);
   if(kind==='antebet'&&!store.features.antebet)return toast('Antebet estará disponible al reiniciar el servidor actualizado. Tus sesiones siguen abiertas.',true);
   const r=$('shot').getBoundingClientRect();const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
   if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>1||y<0||y>1)return;
@@ -197,7 +199,7 @@ function addMark(e,kind){
   store.marks.push({x:Math.round(x*1000000)/1000000,y:Math.round(y*1000000)/1000000,kind,label:''});renderPins();
 }
 $('image-wrap').addEventListener('click',e=>{if(e.button===0)addMark(e,'click');});
-$('image-wrap').addEventListener('contextmenu',e=>{e.preventDefault();addMark(e,'antebet');});
+$('image-wrap').addEventListener('contextmenu',e=>{e.preventDefault();addMark(e,'ordered');});
 function undo(){if(store.review)return;store.marks.pop();renderPins();}
 async function commit(skip=false){
  if(store.review){store.review=null;display();return;}
@@ -206,7 +208,7 @@ async function commit(skip=false){
  const marks=skip?[]:[...store.marks];store.markCaptureVersion??=item.capture?.capturedAt??null;store.saving.add(item.id);renderCaptureWait();
  try{
   const result=await api(`/api/tasks/${item.id}/commit`,'POST',{marks,captureVersion:store.markCaptureVersion});
-  store.saveError='';store.history.push({...item,savedMarks:marks.map((m,i)=>({...m,kind:result.children[i]?.kind||m.kind}))});if(store.history.length>100)store.history.shift();
+  store.saveError='';store.history.push({...item,savedMarks:marks.map((m,i)=>({...m,kind:m.kind==='ordered'?'ordered':result.children[i]?.kind||m.kind}))});if(store.history.length>100)store.history.shift();
   store.focusGameId=marks.length?item.game_id:null;store.focusGameName=item.name||item.slug;
   store.items=store.items.filter(t=>t.id!==item.id);store.selectedId=null;store.marks=[];store.progressAt=0;selectFirst();display();await refresh();
  }catch(e){

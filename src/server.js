@@ -25,7 +25,7 @@ const refreshingTasks=new Set();
 const cache=new ImageCache(config.imageCacheMb*1024*1024);
 const browser=new RemoteBrowser(config,db);
 const scheduler=new Scheduler({db,browser,cache,workers:config.workers,rootWorkers:0,providerIds:Object.keys(PROVIDERS),previewCount:config.previewCount,readyGamesTarget:config.readyGamesTarget,
-  providerLimits:new ProviderLimits(db),eligibleRoot:()=>true});
+  providerLimits:new ProviderLimits(db,{intervalMs:2000}),eligibleRoot:()=>true});
 // Only recover local polling. Remote commands retain their immutable IDs.
 db.db.prepare("UPDATE tasks SET status='queued' WHERE status='preparing'").run();
 await browser.start();
@@ -64,7 +64,7 @@ async function handler(req,res){
       const [file,mime]=staticPaths.get(p);const content=await fs.readFile(path.join(publicDir,file));
       res.writeHead(200,{'Content-Type':mime,'Content-Length':content.length,'Cache-Control':'no-cache'});res.end(content);return;
     }
-    if(req.method==='GET'&&p==='/api/status')return json(res,200,{...scheduler.status(),cloud:{clientId:browser.client.clientId,workers:browser.workers,operations:[...browser.operations.values()],refreshingTasks:[...refreshingTasks],error:browser.lastError||recovery.error,launching:recovery.busy||!browser.workers.length&&Date.now()-db.getSetting('last-fleet-start',0)<120000}});
+    if(req.method==='GET'&&p==='/api/status')return json(res,200,{...scheduler.status(),cloud:{version:'sequence3',clientId:browser.client.clientId,workers:browser.workers,operations:[...browser.operations.values()],refreshingTasks:[...refreshingTasks],error:browser.lastError||recovery.error,launching:recovery.busy||!browser.workers.length&&Date.now()-db.getSetting('last-fleet-start',0)<120000}});
     if(req.method==='GET'&&p==='/api/providers')return json(res,200,{providers:Object.entries(PROVIDERS).map(([id,[name]])=>({id,name,...db.providerBuffer()[id]})),limits:{intervalMs:60000,maxGames:100,maxCaptures:100}});
     if(req.method==='GET'&&p==='/api/progress')return json(res,200,{games:db.gameProgress()});
     if(req.method==='GET'&&p==='/api/history/export'){
@@ -122,7 +122,7 @@ async function handler(req,res){
     if(req.method==='POST'&&finishGame){const body=await receive(req);const pending=captureOf(body.taskId?db.getTask(Number(body.taskId)):null).flowCompletion;if(pending?.purchasePending&&!pending.terminalPurchase)throw Error('El bonus o su premio siguen pendientes: continuá en la misma sesión o cerrá solo la rama.');const result=db.finishGame(Number(finishGame[1]),body.taskId?Number(body.taskId):null);if(result.taskId)await browser.release(result.taskId);scheduler.pump();return json(res,200,result);}
     const release=p.match(/^\/api\/tasks\/(\d+)\/release$/);
     if(req.method==='POST'&&release){await browser.release(Number(release[1]));return json(res,200,{ok:true});}
-    if(req.method==='GET'&&p==='/api/settings')return json(res,200,{hotkeys:db.getSetting('hotkeys',null),features:{antebet:true,finish:true,finishGame:true,freeClicks:true}});
+    if(req.method==='GET'&&p==='/api/settings')return json(res,200,{hotkeys:db.getSetting('hotkeys',null),features:{orderedSequence:true,antebet:true,finish:true,finishGame:true,freeClicks:true}});
     if(req.method==='POST'&&p==='/api/settings'){
       const body=await receive(req);
       if(body.hotkeys){const h=body.hotkeys;

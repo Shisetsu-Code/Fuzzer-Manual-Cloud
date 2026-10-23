@@ -12,7 +12,7 @@ export function exportHistory(db,{provider=null,reviewOnly=false}={}){
    const mark=byMark.get(task.via_mark_id),parent=byTask.get(task.parent_task_id);
    if(!mark||!parent)return null;
    const source=captureOf(parent),result=captureOf(task),width=source.width??source.clip?.width??null,height=source.height??source.clip?.height??null;
-   return {markId:mark.id,sourceTaskId:parent.id,resultTaskId:task.id,ordinal:mark.ordinal,kind:mark.kind,label:mark.label,
+   return {markId:mark.id,sourceTaskId:parent.id,resultTaskId:task.id,ordinal:mark.ordinal,kind:mark.kind,label:mark.label,steps:mark.steps_json?JSON.parse(mark.steps_json):null,executedSteps:result.sequence?.completed||null,
      x:mark.x,y:mark.y,sourceImage:{width,height,clip:source.clip??null,capturedAt:source.capturedAt??null},
      imagePixel:width&&height?{x:mark.x*width,y:mark.y*height}:null,
      freshStart:!!task.fresh_start,replayBranch:!!task.replay_branch,status:task.status,

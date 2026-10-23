@@ -18,7 +18,7 @@ export class Scheduler {
       const continuation=(!this.rootWorkers||this.active.size-this.activeRoots.size<this.workers)
         ?this.db.queuedBatch(20000).find(x=>x.parent_task_id&&allowed(x)&&!this.active.has(x.id)&&this.browser.canPrepare(x)):null;
       const root=(!this.rootWorkers||this.activeRoots.size<this.rootWorkers)&&(this.providerLimits||buffer.coveredGames<this.readyGamesTarget)
-        ?this.db.bufferRoots(20000).find(x=>!this.rootProviders.has(x.provider||'pragmatic')&&allowed(x)&&this.eligibleRoot(x)&&!this.active.has(x.id)&&this.browser.canPrepare(x)):null;
+        ?this.db.bufferRoots(20000).find(x=>(!this.rootWorkers||!this.rootProviders.has(x.provider||'pragmatic'))&&allowed(x)&&this.eligibleRoot(x)&&!this.active.has(x.id)&&this.browser.canPrepare(x)):null;
       // Keep one loader available below the low-water mark; other workers
       // continue the operator's routes. Stored photos do not need live browsers.
       const reserveLoader=this.workers>1&&!this.activeRoots.size&&buffer.readyGames<Math.min(15,this.readyGamesTarget);

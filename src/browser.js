@@ -416,20 +416,32 @@ export class BrowserEngine {
     if(texts.includes('ON')&&!texts.includes('OFF'))return true;
     return false;
   }
+  async runSequence(session,parentCapture,mark){
+    let flow=session.sequenceFlow;
+    if(!flow||flow.markId!==mark.id)flow=session.sequenceFlow={markId:mark.id,cursor:0,completed:[],phase:'running'};
+    if(flow.uncertain)throw new ReplayError('SEQUENCE_UNCERTAIN','No se repite el clic de resultado incierto');
+    const steps=mark.steps||[];if(!steps.length||steps.length>40)throw new ReplayError('INVALID_SEQUENCE');
+    const view=await this.observe(session);const clip=flow.clip||view.clip;flow.clip=clip;
+    while(flow.cursor<steps.length){
+      const index=flow.cursor,point=steps[index];
+      if(!Number.isFinite(point.x)||!Number.isFinite(point.y)||point.x<0||point.x>1||point.y<0||point.y>1)throw new ReplayError('INVALID_MARK');
+      const x=clip.x+point.x*clip.width,y=clip.y+point.y*clip.height;
+      if(!this.inClip(clip,x,y))throw new ReplayError('CLICK_OUTSIDE_DEMO');
+      session.actionStarted=true;flow.cursor=index+1;flow.uncertain=true;
+      await session.page.mouse.click(x,y);this.metrics.clicks++;flow.uncertain=false;
+      flow.completed.push({x:point.x,y:point.y,index:index+1,label:point.label||''});
+      if(flow.cursor<steps.length)await sleep(this.config.sequenceStepDelayMs??700);
+    }
+    flow.phase='sent';const result=await this.waitForGameReady(session,{allowManual:true,timeoutMs:this.config.transitionTimeoutMs??180000});
+    session.manualReason=result.manualReason||null;
+  }
   async runAntebet(session,parentCapture,mark){
     if(providerFor(session.url)&&providerFor(session.url)!=='pragmatic'){
       if(!session.antebetFlow){
         session.antebetFlow={phase:'activate'};
         await this.clickMark(session,parentCapture,{...mark,kind:'click'},{onStarted:()=>{session.antebetFlow.phase='verify';}});
       }
-      if(session.antebetFlow.phase==='verify'){
-        // The operator explicitly marked this coordinate as antebet + one spin.
-        // Persist the phase before input so recovering a capture cannot spin twice.
-        session.antebetFlow.phase='wait-spin';session.antebetFlow.spinInput='Space';
-        await session.page.keyboard.press('Space');this.metrics.clicks++;
-        await this.waitForGameReady(session,{allowManual:true,timeoutMs:this.config.transitionTimeoutMs??180000});
-      }
-      session.manualReason='Antebet pulsado y una orden de tirada enviada. Revisá el resultado; la finalización todavía no está confirmada.';
+      session.manualReason='Acción antigua de antebet: falta una coordenada explícita para la tirada. Marcá una secuencia con clic derecho.';
       return;
     }
     const flow=session.antebetFlow||(session.antebetFlow={phase:'activate',path:controlForMark(parentCapture,mark)?.path||null});
@@ -489,7 +501,7 @@ export class BrowserEngine {
     this.metrics.screenshots++;this.metrics.bytes+=bytes.length;
     const visualKey=await imageSignature(bytes);
     if(manualReason)session.manualToken ||= randomUUID();
-    return {file:target,capture:{visualKey,clip:view.clip,width:view.clip.width,height:view.clip.height,actionApplied,
+    return {file:target,capture:{...(session.sequenceFlow?{sequence:session.sequenceFlow}:{}),visualKey,clip:view.clip,width:view.clip.width,height:view.clip.height,actionApplied,
       ...(manualReason?{manualReview:true,manualReason,manualToken:session.manualToken,entryReview:!!view.entryReview}:{}),
       initialLoadWaitApplied:session.initialLoadWaitApplied===true,startupVersion:2,gameRunning:session.genericRunning===true||!['INTRO','UNKNOWN'].includes(view.state),entryIssue:session.entryIssue||null,entryOverlaysVersion:1,rootMode,state:view.state,signature:view.signature,controls:view.controls,
       frameUrl:view.frameUrl,network:session.events.slice(-25),capturedAt:new Date().toISOString(),bytes:bytes.length}};
@@ -513,12 +525,13 @@ export class BrowserEngine {
     try{
       if(!session)session=await this.fresh(task.url);
       session.actionStarted=false;
-      if(lineage.length&&!recovering)session.manualReason=null;
+      if(lineage.length&&!recovering){session.manualReason=null;delete session.sequenceFlow;}
       let mode=recovering?session.rootMode||'base':'base';
       if(session.manualReason){requiresLive=true;}
       else if(recovering){
         requiresLive=true;
-        if(session.antebetFlow){
+        if(lineage.at(-1)?.mark.kind==='sequence'){atTarget=true;const step=lineage.at(-1);await this.runSequence(session,captureOf(step.parent),step.mark);}
+        else if(session.antebetFlow){
           atTarget=true;
           const step=lineage.at(-1);
           await this.runAntebet(session,captureOf(step.parent),step.mark);
@@ -550,7 +563,8 @@ export class BrowserEngine {
         const parentInfo=!inherited&&savedParentInfo.manualReview?{...savedParentInfo,replayableRoot:true,requiresLive:false}:savedParentInfo;
         atTarget=true;
         delete session.antebetFlow;
-        if(step.mark.kind==='antebet')await this.runAntebet(session,parentInfo,step.mark);
+        if(step.mark.kind==='sequence')await this.runSequence(session,parentInfo,step.mark);
+        else if(step.mark.kind==='antebet')await this.runAntebet(session,parentInfo,step.mark);
         else await this.clickMark(session,parentInfo,step.mark);
         mode=parentInfo.rootMode==='menu'||captureState(captureOf(lineage[0].parent))==='BUY_MENU'?'menu':'base';
       }

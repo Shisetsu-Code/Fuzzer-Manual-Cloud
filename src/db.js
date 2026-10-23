@@ -5,6 +5,7 @@ import path from 'node:path';
 import {demoUrl,gameSlug,normalizeMarks} from './config.js';
 import {captureOf,captureState,classifyMark,captureNeedsLive,captureCanBranch,markNeedsLive} from './actions.js';
 
+const decodeMark=m=>m?{...m,...(m.steps_json?{steps:JSON.parse(m.steps_json)}:{})}:null;
 export class CatalogDB {
   constructor(dir,{sqliteCacheMb=256}={}){
     fs.mkdirSync(dir,{recursive:true});
@@ -41,6 +42,7 @@ export class CatalogDB {
     );
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
     `);
+    if(!this.db.prepare('PRAGMA table_info(marks)').all().some(c=>c.name==='steps_json'))this.db.exec('ALTER TABLE marks ADD COLUMN steps_json TEXT');
     if(!this.db.prepare('PRAGMA table_info(tasks)').all().some(c=>c.name==='fresh_start'))
       this.db.exec('ALTER TABLE tasks ADD COLUMN fresh_start INTEGER NOT NULL DEFAULT 0');
     if(!this.db.prepare('PRAGMA table_info(tasks)').all().some(c=>c.name==='replay_branch'))
@@ -113,8 +115,8 @@ export class CatalogDB {
     return {added,existing,unique:urls.length};
   }
   getTask(id){return this.db.prepare(`SELECT t.*,g.url,g.slug,g.provider,g.name FROM tasks t JOIN games g ON t.game_id=g.id WHERE t.id=?`).get(id)||null;}
-  getMark(id){return this.db.prepare('SELECT * FROM marks WHERE id=?').get(id)||null;}
-  marksForTask(id){return this.db.prepare('SELECT * FROM marks WHERE task_id=? ORDER BY ordinal').all(id);}
+  getMark(id){return decodeMark(this.db.prepare('SELECT * FROM marks WHERE id=?').get(id));}
+  marksForTask(id){return this.db.prepare('SELECT * FROM marks WHERE task_id=? ORDER BY ordinal').all(id).map(decodeMark);}
   listReady(limit=100,provider=null){return this.db.prepare(`SELECT t.id,t.game_id,t.depth,t.status,t.capture_file,t.capture_json,t.updated_at,g.slug,g.url,g.provider,g.name,COUNT(m.id) as marks_count
   FROM tasks t JOIN games g ON t.game_id=g.id LEFT JOIN marks m ON m.task_id=t.id
   WHERE t.status='ready' AND (? IS NULL OR g.provider=?) GROUP BY t.id ORDER BY (g.manual_requested_at IS NOT NULL) DESC,t.depth DESC,t.id ASC LIMIT ?`).all(provider,provider,limit).map(x=>({...x,branchable:captureCanBranch(captureOf(x)),capture:x.capture_json?(({state,rootMode,capturedAt,bytes,antebet,manualReview,manualReason,entryReview,gameRunning,startupVersion})=>({state,rootMode,capturedAt,bytes,antebet,manualReview,manualReason,entryReview,gameRunning,startupVersion}))(JSON.parse(x.capture_json)):null,capture_json:undefined}));}
@@ -222,7 +224,9 @@ export class CatalogDB {
   }
   // The photo receives all the marks at once. Every point creates an independent child job.
   commit(id,rawMarks){
-    let marks=normalizeMarks(rawMarks);const task=this.getTask(id);
+    let marks=normalizeMarks(rawMarks);
+    const ordered=marks.filter(m=>m.kind==='ordered');if(ordered.length){let placed=false;marks=marks.flatMap(m=>{if(m.kind!=='ordered')return [m];if(placed)return [];placed=true;return [{...m,kind:'sequence',steps:ordered.map(point=>({...point,kind:'click'}))}];});}
+    const task=this.getTask(id);
     if(!task)throw Error('Task not found');
     if(task.status!=='ready')throw Error('Task already cataloged or not ready');
     const capture=captureOf(task);
@@ -232,10 +236,10 @@ export class CatalogDB {
     if(task.depth>=24&&marks.length&&!independent)throw Error('Maximum route depth: 24');
     this.db.exec('BEGIN IMMEDIATE');
     try{
-      const addMark=this.db.prepare('INSERT INTO marks(task_id,ordinal,x,y,kind,label) VALUES(?,?,?,?,?,?)');
+      const addMark=this.db.prepare('INSERT INTO marks(task_id,ordinal,x,y,kind,label,steps_json) VALUES(?,?,?,?,?,?,?)');
       const addTask=this.db.prepare("INSERT INTO tasks(game_id,parent_task_id,via_mark_id,depth,status,fresh_start,replay_branch) VALUES(?,?,?,?,'queued',?,?)");
       const children=[];
-      marks.forEach((m,i)=>{const mr=addMark.run(id,i+1,m.x,m.y,m.kind,m.label);
+      marks.forEach((m,i)=>{const mr=addMark.run(id,i+1,m.x,m.y,m.kind,m.label,m.steps?JSON.stringify(m.steps):null);
         const tr=addTask.run(task.game_id,id,Number(mr.lastInsertRowid),independent?1:task.depth+1,independent?1:0,splitLive&&!independent&&i>0?1:0);
         children.push({taskId:Number(tr.lastInsertRowid),markId:Number(mr.lastInsertRowid),kind:m.kind});
       });

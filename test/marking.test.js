@@ -13,7 +13,7 @@ function ui(fetcher){
   const context=vm.createContext({fetch:fetcher,document:{getElementById:get,createElement:element,createTextNode:t=>t,querySelectorAll:()=>[],addEventListener(){}},setTimeout(){},clearTimeout(){}});
   const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/init\(\);\s*$/,'');
   vm.runInContext(source+'\nglobalThis.state=store;',context);
-  context.state.items=[{id:1}];context.state.selectedId=1;context.state.features={antebet:true,freeClicks:true,finish:true,finishGame:true};
+  context.state.items=[{id:1}];context.state.selectedId=1;context.state.features={orderedSequence:true,antebet:true,freeClicks:true,finish:true,finishGame:true};
   return {commit:context.commit,context,updateCapture:context.updateCapture,get,state:context.state,renderQueue:context.renderQueue,selectFirst:context.selectFirst,renderPins:context.renderPins,renderProgress:context.renderProgress,antebetNotice:context.antebetNotice,canFinishGame:context.canFinishGame,undo:context.undo};
 }
 
@@ -23,8 +23,8 @@ test('left and right clicks mark several independent purchase and antebet option
   get('image-wrap').events.contextmenu({clientX:300,clientY:200,preventDefault(){prevented++;}});
   get('image-wrap').events.click({button:0,clientX:500,clientY:200});
   get('image-wrap').events.contextmenu({clientX:700,clientY:200,preventDefault(){prevented++;}});
-  assert.deepEqual(Array.from(state.marks,m=>m.kind),['click','antebet','click','antebet']);
-  assert.equal(prevented,2);assert.equal(get('pins').children[1].textContent,'A2');
+  assert.deepEqual(Array.from(state.marks,m=>m.kind),['click','ordered','click','ordered']);
+  assert.equal(prevented,2);assert.equal(get('pins').children[1].textContent,'S1');
 });
 
 test('review stays read-only while live screens accept a batch of marks',()=>{
@@ -33,10 +33,10 @@ test('review stays read-only while live screens accept a batch of marks',()=>{
   state.review=null;state.items[0].live=true;state.items[0].branchable=false;click();click();assert.equal(state.marks.length,2);
 });
 
-test('an older server cannot silently accept unsupported antebet marks',()=>{
+test('an older server cannot silently accept unsupported coordinate sequences',()=>{
   const {get,state}=ui();state.features={};
   get('image-wrap').events.contextmenu({clientX:200,clientY:200,preventDefault(){}});
-  assert.equal(state.marks.length,0);assert.match(get('toast').textContent,/reiniciar/);
+  assert.equal(state.marks.length,0);assert.match(get('toast').textContent,/Actualizá/);
 });
 
 test('the registry keeps completed counts separate from pending marks, even with no selected photo',()=>{
@@ -65,7 +65,7 @@ test('a live base photo permits menu and antebet marks as independent branches',
   const {get,state}=ui();state.items[0].live=true;state.items[0].branchable=true;
   get('image-wrap').events.click({button:0,clientX:100,clientY:100});
   get('image-wrap').events.contextmenu({clientX:300,clientY:200,preventDefault(){}});
-  assert.deepEqual(Array.from(state.marks,m=>m.kind),['click','antebet']);
+  assert.deepEqual(Array.from(state.marks,m=>m.kind),['click','ordered']);
 });
 
 test('ordinary clicks have optional operator notes and no category selector',()=>{
@@ -130,7 +130,7 @@ test('server-side capture refresh disables save even after the page has been reo
 
 test('executed click indicators are green and text action lists stay hidden',()=>{
  const css=fs.readFileSync(new URL('../public/style.css',import.meta.url),'utf8'),html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
- assert.match(css,/\.previous-click\{[^}]*#7aff9a/);assert.match(html,/id="action-history" hidden/);assert.match(html,/id="mark-list"[^>]*hidden/);assert.match(html,/Verde: clic ya ejecutado aquí/);assert.match(html,/Azul: marca nueva sin ejecutar/);
+ assert.match(css,/\.previous-click\{[^}]*#7aff9a/);assert.match(html,/id="action-history" hidden/);assert.match(html,/id="mark-list"[^>]*hidden/);assert.match(html,/Verde: clic ya ejecutado aquí/);assert.match(html,/Azul: marca nueva/);
  const {get,state,renderPins}=ui();state.items[0].previousClicks=[{id:2,x:.25,y:.75,label:'Clic',onRoute:true}];renderPins();const pin=get('pins').children[0];assert.equal(pin.style.left,'25%');assert.equal(pin.style.top,'75%');assert.equal(pin.textContent,'✓');assert.match(get('marks-count').textContent,/1 clics realizados aquí/);
 });
 

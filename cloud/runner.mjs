@@ -9,7 +9,7 @@ if(process.env.GITHUB_ACTIONS!=='true'&&process.env.CLOUD_TEST_WORKER!=='1')thro
 if(process.env.CONFIRM_ADULT!=='true')throw Error('Falta autorización de adulto para demos');
 const endpoint=process.env.CLOUD_URL?.replace(/\/$/,''),token=process.env.CLOUD_WORKER_TOKEN,clientId=process.env.CLOUD_CLIENT_ID;
 if(!/^https:\/\//.test(endpoint||'')||!token||!clientId)throw Error('Falta configuración privada del worker');
-const workerId=`gh-${process.env.GITHUB_RUN_ID||'test'}-${process.env.GITHUB_RUN_ATTEMPT||'1'}-${process.env.WORKER_INDEX||'1'}-batch2`;
+const workerId=`gh-${process.env.GITHUB_RUN_ID||'test'}-${process.env.GITHUB_RUN_ATTEMPT||'1'}-${process.env.WORKER_INDEX||'1'}-sequence3`;
 const capacity=Number(process.env.GAMES_PER_WORKER||8);if(!Number.isInteger(capacity)||capacity<1||capacity>8)throw Error('Capacidad inválida');
 const budget=Number(process.env.WORKER_MINUTES||60);if(!Number.isInteger(budget)||budget<1||budget>300)throw Error('Duración inválida');
 const config={...loadConfig(),headless:true,retainRoots:true,initialLoadWaitMs:60000,maxLive:capacity,gpuMode:'default',dataDir:path.resolve('.local',workerId),transitionTimeoutMs:600000};
@@ -62,7 +62,7 @@ async function execute(command){
   else{
    const {task,lineage}=command.payload;
    // Rebuilding a navigation menu is fine; replaying an old purchase is not.
-   if(task.replay_branch&&lineage.slice(0,-1).some(s=>['buy','spin','confirm','antebet','antebet_toggle','pick','continue'].includes(classifyMark(captureOf(s.parent),s.mark).kind)||captureOf(s.parent).flowCompletion?.purchasePending))throw Error('LIVE_SESSION_LOST: no se reconstruye una compra anterior');
+   if(task.replay_branch&&lineage.slice(0,-1).some(s=>['sequence','buy','spin','confirm','antebet','antebet_toggle','pick','continue'].includes(classifyMark(captureOf(s.parent),s.mark).kind)||captureOf(s.parent).flowCompletion?.purchasePending))throw Error('LIVE_SESSION_LOST: no se reconstruye una compra anterior');
    tasks.set(task.id,task);for(const s of lineage)tasks.set(s.parent.id,s.parent);lineages.set(task.id,lineage);
    const prepared=await engine.prepare(task);image=await fs.readFile(prepared.file);result={capture:prepared.capture,live:prepared.live};
   }

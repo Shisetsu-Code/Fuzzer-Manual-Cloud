@@ -36,18 +36,21 @@ export class RemoteBrowser {
  stop(){this.closed=true;clearInterval(this.timer);return Promise.resolve();}
  hasLive(taskId){return this.workers.some(w=>w.live?.includes(Number(taskId)));}
  liveCount(){return this.workers.reduce((n,w)=>n+(w.live?.length||0),0);}
- modernSlots(){return this.workers.filter(w=>w.id.endsWith('-batch2')&&w.capacity-w.live.length-w.active-(this.newReservations.get(w.id)||0)>0);}
- canPrepare(task){if(task&&(task.replay_branch||task.fresh_start||!task.parent_task_id)&&this.workers.some(w=>w.id.endsWith('-batch2')))return this.modernSlots().length>0;return this.workers.length>0;}
+ modernSlots(sequence=false){sequence=sequence||this.workers.some(w=>w.id.endsWith('-sequence3'));return this.workers.filter(w=>(!sequence||w.id.endsWith('-sequence3'))&&/-(?:batch2|sequence3)$/.test(w.id)&&w.capacity-w.live.length-w.active-(this.newReservations.get(w.id)||0)>0);}
+ canPrepare(task){if(task&&this.db.getMark?.(task.via_mark_id)?.kind==='sequence'){const source=this.db.getTask(task.parent_task_id);if(captureOf(source).remoteWorker?.endsWith('-sequence3')&&this.hasLive(task.parent_task_id))return true;return this.modernSlots(true).length>0;}if(task&&(task.replay_branch||task.fresh_start||!task.parent_task_id)&&this.workers.some(w=>/-(?:batch2|sequence3)$/.test(w.id)))return this.modernSlots().length>0;return this.workers.length>0;}
  async release(taskId){
   const worker=this.workers.find(w=>w.live?.includes(Number(taskId)));if(!worker)return false;
   await this.client.submit(`${this.client.clientId}:release:${taskId}`,{op:'release',taskId},worker.id);return true;
  }
  async prepare(task){
-  if(task.provider&&task.provider!=='pragmatic'&&this.workers.some(w=>w.id.endsWith('-batch2'))&&this.db.getMark?.(task.via_mark_id)?.kind==='antebet')task={...task,replay_branch:1};
+  const sequence=this.db.getMark?.(task.via_mark_id)?.kind==='sequence';
+  if(sequence){const source=this.db.getTask(task.parent_task_id),worker=captureOf(source).remoteWorker;if(!worker?.endsWith('-sequence3'))task={...task,replay_branch:1};}
+  if(task.provider&&task.provider!=='pragmatic'&&this.workers.some(w=>/-(?:batch2|sequence3)$/.test(w.id))&&this.db.getMark?.(task.via_mark_id)?.kind==='antebet')task={...task,replay_branch:1};
   const parent=task.parent_task_id?this.db.getTask(task.parent_task_id):null,capture=captureOf(parent);
   let affinity=!task.fresh_start&&!task.replay_branch&&captureNeedsLive(capture)?capture.remoteWorker:null;
-  let reserved=null;if(task.replay_branch||task.fresh_start||!task.parent_task_id){const modern=this.modernSlots().sort((a,b)=>(a.active+a.live.length)-(b.active+b.live.length));if(modern.length){affinity=modern[0].id;reserved=affinity;this.newReservations.set(reserved,(this.newReservations.get(reserved)||0)+1);}else if(this.workers.some(w=>w.id.endsWith('-batch2')))throw Error('LIVE_SLOTS_FULL');}
+  let reserved=null;if(task.replay_branch||task.fresh_start||!task.parent_task_id){const modern=this.modernSlots(sequence).sort((a,b)=>(a.active+a.live.length)-(b.active+b.live.length));if(modern.length){affinity=modern[0].id;reserved=affinity;this.newReservations.set(reserved,(this.newReservations.get(reserved)||0)+1);}else if(this.workers.some(w=>/-(?:batch2|sequence3)$/.test(w.id)))throw Error('LIVE_SLOTS_FULL');}
   if(captureNeedsLive(capture)&&!task.fresh_start&&!task.replay_branch&&!affinity)throw Error('LIVE_SESSION_LOST: falta el worker original');
+  if(sequence&&!affinity?.endsWith('-sequence3'))throw Error('Esperando un worker actualizado para la secuencia');
   const lineage=this.db.lineage(task.id).map(s=>({parent:taskData(s.parent),mark:s.mark}));
   const id=`${this.client.clientId}:task:${task.id}`;
   try{
