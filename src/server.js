@@ -31,6 +31,13 @@ db.db.prepare("UPDATE tasks SET status='queued' WHERE status='preparing'").run()
 await browser.start();
 const recovery=new FleetRecovery({db,browser,launch:launchFleet});
 const recoveryTimer=setInterval(()=>recovery.tick().catch(e=>{recovery.error=e.message;}),10000);recoveryTimer.unref();
+// Reattach outstanding read-only observations when updating the local client.
+const restoreFile=path.join(config.dataDir,'restore-observations.json');
+const restoring=await fs.readFile(restoreFile,'utf8').then(JSON.parse).catch(()=>[]);
+for(const pending of restoring){const task=db.getTask(pending.taskId);if(task?.status!=='ready'||refreshingTasks.has(task.id))continue;
+ refreshingTasks.add(task.id);browser.waitForResult(pending.id,task).then(result=>{db.refreshReady(task.id,result);cache.invalidate(result.file);}).catch(e=>{browser.lastError=`Captura #${task.id}: ${e.message}`;}).finally(()=>refreshingTasks.delete(task.id));
+}
+if(restoring.length)await fs.unlink(restoreFile).catch(()=>{});
 const here=path.dirname(fileURLToPath(import.meta.url));
 const publicDir=path.resolve(here,'../public');
 const staticPaths=new Map([['/', ['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
@@ -57,7 +64,7 @@ async function handler(req,res){
       const [file,mime]=staticPaths.get(p);const content=await fs.readFile(path.join(publicDir,file));
       res.writeHead(200,{'Content-Type':mime,'Content-Length':content.length,'Cache-Control':'no-cache'});res.end(content);return;
     }
-    if(req.method==='GET'&&p==='/api/status')return json(res,200,{...scheduler.status(),cloud:{clientId:browser.client.clientId,workers:browser.workers,operations:[...browser.operations.values()],error:browser.lastError||recovery.error,launching:recovery.busy||!browser.workers.length&&Date.now()-db.getSetting('last-fleet-start',0)<120000}});
+    if(req.method==='GET'&&p==='/api/status')return json(res,200,{...scheduler.status(),cloud:{clientId:browser.client.clientId,workers:browser.workers,operations:[...browser.operations.values()],refreshingTasks:[...refreshingTasks],error:browser.lastError||recovery.error,launching:recovery.busy||!browser.workers.length&&Date.now()-db.getSetting('last-fleet-start',0)<120000}});
     if(req.method==='GET'&&p==='/api/providers')return json(res,200,{providers:Object.entries(PROVIDERS).map(([id,[name]])=>({id,name,...db.providerBuffer()[id]})),limits:{intervalMs:60000,maxGames:100,maxCaptures:100}});
     if(req.method==='GET'&&p==='/api/progress')return json(res,200,{games:db.gameProgress()});
     if(req.method==='GET'&&p==='/api/history/export'){
@@ -104,6 +111,7 @@ async function handler(req,res){
     if(req.method==='POST'&&commit){
       const id=Number(commit[1]);if(refreshingTasks.has(id))throw Error('Esperá la captura nueva antes de enviar clics');const data=await receive(req);
       const source=captureOf(db.getTask(id));
+      if(data.captureVersion&&data.captureVersion!==source.capturedAt)throw Error('La captura cambió; revisá las marcas sobre la imagen nueva antes de guardar');
       if(source.flowCompletion?.version&&captureNeedsLive(source)&&!captureCanBranch(source)&&data.marks?.length>1)throw Error('Esta pantalla usa una sesión viva: elegí una opción por vez. En un menú inicial podés marcar varias.');
       const result=db.commit(id,data.marks);
       if(result.marks===0||result.independent)await browser.release(id);
