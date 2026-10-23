@@ -21,7 +21,7 @@ const taskData=t=>Object.fromEntries(['id','game_id','url','parent_task_id','via
 export class RemoteBrowser {
  constructor(config,db,{client=null,sleep=ms=>new Promise(r=>setTimeout(r,ms))}={}){
   this.config=config;this.db=db;this.sleep=sleep;this.metrics={sessionsOpened:0,screenshots:0,bytes:0,clicks:0,lastRenderer:'GitHub remoto'};
-  this.client=client;this.workers=[];this.pending=new Set();this.operations=new Map();this.closed=false;this.lastError=null;
+  this.client=client;this.workers=[];this.pending=new Set();this.operations=new Map();this.newReservations=new Map();this.closed=false;this.lastError=null;
  }
  async start(){
   if(!this.client){await fs.mkdir(this.config.dataDir,{recursive:true});const idFile=path.join(this.config.dataDir,'cloud-client-id');
@@ -36,17 +36,21 @@ export class RemoteBrowser {
  stop(){this.closed=true;clearInterval(this.timer);return Promise.resolve();}
  hasLive(taskId){return this.workers.some(w=>w.live?.includes(Number(taskId)));}
  liveCount(){return this.workers.reduce((n,w)=>n+(w.live?.length||0),0);}
- canPrepare(){return this.workers.length>0;}
+ modernSlots(){return this.workers.filter(w=>w.id.endsWith('-batch2')&&w.capacity-w.live.length-w.active-(this.newReservations.get(w.id)||0)>0);}
+ canPrepare(task){if(task&&(task.replay_branch||task.fresh_start||!task.parent_task_id)&&this.workers.some(w=>w.id.endsWith('-batch2')))return this.modernSlots().length>0;return this.workers.length>0;}
  async release(taskId){
   const worker=this.workers.find(w=>w.live?.includes(Number(taskId)));if(!worker)return false;
   await this.client.submit(`${this.client.clientId}:release:${taskId}`,{op:'release',taskId},worker.id);return true;
  }
  async prepare(task){
+  if(task.provider&&task.provider!=='pragmatic'&&this.workers.some(w=>w.id.endsWith('-batch2'))&&this.db.getMark?.(task.via_mark_id)?.kind==='antebet')task={...task,replay_branch:1};
   const parent=task.parent_task_id?this.db.getTask(task.parent_task_id):null,capture=captureOf(parent);
-  const affinity=!task.fresh_start&&!task.replay_branch&&captureNeedsLive(capture)?capture.remoteWorker:null;
+  let affinity=!task.fresh_start&&!task.replay_branch&&captureNeedsLive(capture)?capture.remoteWorker:null;
+  let reserved=null;if(task.replay_branch||task.fresh_start||!task.parent_task_id){const modern=this.modernSlots().sort((a,b)=>(a.active+a.live.length)-(b.active+b.live.length));if(modern.length){affinity=modern[0].id;reserved=affinity;this.newReservations.set(reserved,(this.newReservations.get(reserved)||0)+1);}else if(this.workers.some(w=>w.id.endsWith('-batch2')))throw Error('LIVE_SLOTS_FULL');}
   if(captureNeedsLive(capture)&&!task.fresh_start&&!task.replay_branch&&!affinity)throw Error('LIVE_SESSION_LOST: falta el worker original');
   const lineage=this.db.lineage(task.id).map(s=>({parent:taskData(s.parent),mark:s.mark}));
   const id=`${this.client.clientId}:task:${task.id}`;
+  try{
   await this.client.submit(id,{op:'prepare',task:taskData(task),lineage},affinity);
   const prepared=await this.waitForResult(id,task);
   if(!task.parent_task_id&&prepared.live&&!prepared.capture.initialLoadWaitApplied){
@@ -55,6 +59,7 @@ export class RemoteBrowser {
    const final=await this.waitForResult(waitId,task);final.capture.initialLoadWaitApplied=true;return final;
   }
   return prepared;
+  }finally{if(reserved)this.newReservations.set(reserved,Math.max(0,(this.newReservations.get(reserved)||1)-1));}
  }
  async refresh(task,{waitSeconds=0}={}){
   if(!Number.isInteger(waitSeconds)||waitSeconds<0||waitSeconds>60)throw Error("La espera debe ser de 0 a 60 segundos");

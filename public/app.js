@@ -17,7 +17,6 @@ async function api(url,method='GET',body){const res=await fetch(url,{method,head
   try{data=await res.json();}catch{data={error:`HTTP ${res.status}`};}
   if(!res.ok)throw Error(data.error||`HTTP ${res.status}`);return data;
 }
-function singleChoice(item){return item?.branchable===false&&!!(item.live||item.capture?.manualReview||item.capture?.requiresLive||item.capture?.state==='BONUS');}
 function captureWaiting(id){return store.refreshing.has(id)||store.serverRefreshing.has(id);}
 function getCurrent(){return store.review||store.items.find(x=>x.id===store.selectedId)||null;}
 function canFinishGame(game,item){
@@ -101,7 +100,7 @@ function downloadHistory(format){
 }
 function renderPins(){
   const pins=$('pins');pins.replaceChildren();const marks=store.review?.savedMarks||store.marks;
-  if(!store.review)for(const m of getCurrent()?.previousClicks||[]){const el=document.createElement('div');el.className='pin previous-click';el.style.left=`${m.x*100}%`;el.style.top=`${m.y*100}%`;el.textContent='✓';el.title=`${m.label} ya ejecutado · operación #${m.id}${m.onRoute?' · esta ruta':' · otra ruta'}`;pins.append(el);}
+  if(!store.review)for(const m of getCurrent()?.previousClicks||[]){const el=document.createElement('div');el.className='pin previous-click';el.style.left=`${m.x*100}%`;el.style.top=`${m.y*100}%`;el.textContent='✓';if(m.lastAction&&!m.sameScreen){const badge=document.createElement('span');badge.className='last-click-label';badge.textContent='Último clic';el.append(badge);}el.title=`${m.lastAction?'Último clic ejecutado (posición en la pantalla anterior). ':''}${m.label} ya ejecutado · operación #${m.id}${m.onRoute?' · esta ruta':' · otra ruta'}`;pins.append(el);}
   marks.forEach((m,i)=>{const el=document.createElement('div');el.className='pin'+(m.kind==='antebet'?' antebet':'');el.style.left=`${m.x*100}%`;el.style.top=`${m.y*100}%`;el.textContent=(m.kind==='antebet'?'A':'')+String(i+1);el.title=m.label||`Clic ${i+1}`;pins.append(el);});
   $('marks-count').textContent=`${store.review?0:(getCurrent()?.previousClicks?.length||0)} clics realizados aquí · ${marks.length} marcas nuevas`;
   const list=$('mark-list');list.replaceChildren();
@@ -190,7 +189,6 @@ function addMark(e,kind){
   if(!store.marks.length){store.markCaptureVersion=getCurrent()?.capture?.capturedAt??null;store.saveError='';}
   if(captureWaiting(getCurrent()?.id))return;
   if(store.review||!getCurrent())return;
-  if(singleChoice(getCurrent())&&store.marks.length)return toast('Una opción por vez en esta pantalla. Guardá el clic actual o usá Deshacer para cambiarlo.',true);
   if(kind==='click'&&!store.features.freeClicks)return toast('Los clics libres se activarán al reiniciar el servidor actualizado.',true);
   if(kind==='antebet'&&!store.features.antebet)return toast('Antebet estará disponible al reiniciar el servidor actualizado. Tus sesiones siguen abiertas.',true);
   const r=$('shot').getBoundingClientRect();const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
@@ -205,7 +203,6 @@ async function commit(skip=false){
  if(store.review){store.review=null;display();return;}
  const item=getCurrent();if(!item||store.saving.has(item.id))return;
  if(captureWaiting(item.id))return toast('La captura se está actualizando. Tus marcas siguen guardadas aquí.',true);
- if(!skip&&singleChoice(item)&&store.marks.length>1)return toast('Usá Deshacer hasta dejar una sola marca y luego guardá.',true);
  const marks=skip?[]:[...store.marks];store.markCaptureVersion??=item.capture?.capturedAt??null;store.saving.add(item.id);renderCaptureWait();
  try{
   const result=await api(`/api/tasks/${item.id}/commit`,'POST',{marks,captureVersion:store.markCaptureVersion});
@@ -306,7 +303,6 @@ function renderCaptureWait(){
  $('cloud-wait').textContent=busy?(store.remoteOperations.get(item.id)?.state==='queued'?'Esperando worker libre…':'Esperando nueva captura…'):'Sigue cargando · esperar y capturar';
  if(store.saveError){$('live-note').hidden=false;$('live-note').textContent=store.saveError;}
  if(item&&store.marks.length&&store.markCaptureVersion&&store.markCaptureVersion!==item.capture?.capturedAt){$('save-btn').disabled=true;$('live-note').hidden=false;$('live-note').textContent='La captura cambió. Tus marcas anteriores se conservaron; limpiá y volvé a marcar sobre la imagen nueva antes de guardar.';}
- if(item&&singleChoice(item)&&!busy){$('hint').textContent='Una opción por vez · Deshacer para cambiar el clic';if(store.marks.length>1){$('save-btn').disabled=true;$('live-note').hidden=false;$('live-note').textContent='Hay varias marcas. Usá Deshacer hasta dejar una sola; después guardá.';}}
  const waitError=item&&store.waitErrors.get(item.id);if(waitError){$('live-note').hidden=false;$('live-note').textContent=`No llegó una captura nueva: ${waitError}. La imagen visible es la anterior.`;}
  if(busy){$('save-btn').disabled=true;$('skip-btn').disabled=true;$('finish-btn').disabled=true;}
 }

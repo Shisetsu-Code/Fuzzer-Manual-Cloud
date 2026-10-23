@@ -112,7 +112,6 @@ async function handler(req,res){
       const id=Number(commit[1]);if(refreshingTasks.has(id))throw Error('Esperá la captura nueva antes de enviar clics');const data=await receive(req);
       const source=captureOf(db.getTask(id));
       if(data.captureVersion&&data.captureVersion!==source.capturedAt)throw Error('La captura cambió; revisá las marcas sobre la imagen nueva antes de guardar');
-      if(source.flowCompletion?.version&&captureNeedsLive(source)&&!captureCanBranch(source)&&data.marks?.length>1)throw Error('Esta pantalla usa una sesión viva: elegí una opción por vez. En un menú inicial podés marcar varias.');
       const result=db.commit(id,data.marks);
       if(result.marks===0||result.independent)await browser.release(id);
       scheduler.pump();return json(res,200,result);

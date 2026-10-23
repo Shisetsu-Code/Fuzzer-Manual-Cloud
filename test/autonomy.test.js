@@ -317,3 +317,12 @@ test('fresh sessions wait for their configured initial loading window before ret
  engine.browser={newContext:async()=>({newPage:async()=>({on(){}})})};
  const start=Date.now();const session=await engine.fresh('https://www.pragmaticplay.fun/en/slots/candy-rush/');assert.ok(Date.now()-start>=30);assert.equal(session.initialLoadWaitApplied,false);
 });
+
+test('a second marked option on a manual screenshot reconstructs its branch without the old manual token',async t=>{
+ const {db,root}=fixture(t),{default:sharp}=await import('sharp'),{imageSignature}=await import('../src/visual.js');
+ const bytes=await sharp({create:{width:1000,height:600,channels:3,background:'#247'}}).jpeg().toBuffer();
+ const source={...view('UNKNOWN',[]),frameUrl:'https://demo.example/game',manualReview:true,manualToken:'old',visualKey:await imageSignature(bytes),requiresLive:true};ready(db,root,source);
+ const split=db.commit(root.id,[{x:.2,y:.3,kind:'click'},{x:.7,y:.3,kind:'click'}]);const task=db.getTask(split.children[1].taskId);
+ const f=engineFor(db,source,source);f.engine.config.maxLive=2;f.engine.config.visualTolerance=.01;f.session.page.screenshot=async()=>bytes;
+ const result=await f.engine.prepare(task);assert.equal(f.clicks(),1);assert.equal(result.live,true);assert.equal(task.replay_branch,1);
+});

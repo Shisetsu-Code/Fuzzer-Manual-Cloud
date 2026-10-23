@@ -35,3 +35,8 @@ test('stable runtime controls can match the same screen even when reel symbols c
 test('repeated queue entries cannot show two images for one game operation',t=>{
  const db=fixture(t);ready(db,1,base);const item=db.listReady()[0];assert.equal(describeQueue(db,[item,item]).length,1);
 });
+
+test('the last executed click remains visible on its result even when the reels and state changed',t=>{
+ const db=fixture(t);ready(db,1,{...base,frameUrl:'https://demo.example/game'});const child=db.commit(1,[{x:.8,y:.7,kind:'spin'}]).children[0].taskId;
+ ready(db,child,{...base,state:'BONUS',visualKey:Buffer.alloc(576,240).toString('base64'),actionApplied:true});const result=describeQueue(db,db.listReady())[0];assert.equal(result.previousClicks.length,1);assert.equal(result.previousClicks[0].sameScreen,false);assert.equal(result.previousClicks[0].lastAction,true);assert.equal(result.previousClicks[0].x,.8);
+});

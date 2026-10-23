@@ -114,3 +114,9 @@ Los juegos nuevos tienen **un minuto de carga por defecto** antes de entregar la
 Si una tarjeta dice **Esperando worker libre**, todavía no empezó su captura: falta una sesión disponible. **Capturando en worker** indica que ya se ejecuta. Los fallos pasajeros de consulta a D1 no cierran de inmediato los navegadores. Si hay trabajo pendiente y se perdió parte de la flota, el lanzador repone solo los workers que faltan, con una pausa entre intentos; **Apagar workers** desactiva esta recuperación. Las flotas de reposición conservan las sesiones originales y no repiten compras ni tiradas.
 
 Los clics ejecutados se indican directamente sobre su coordenada con un ✓ verde. Las listas laterales de clics están ocultas; el historial continúa guardado y disponible en la exportación.
+
+
+### Marcar una tanda completa
+Podés marcar varias opciones sobre la misma fotografía y guardarlas juntas: clic izquierdo = ejecutar en esa coordenada; clic derecho = antebet y una orden de tirada. Cada marca crea su propia operación vinculada a la fotografía de origen, sin pedirte que vuelvas a marcarla. El motor conserva la primera rama y reconstruye las otras desde su ruta y la verifica visualmente. Si esa ruta exige repetir una compra o tirada anterior identificada, queda un problema explícito en vez de repetirla silenciosamente.
+
+El ✓ verde con **Último clic** muestra la posición de la acción ejecutada que produjo la imagen actual, aunque hayan cambiado los carretes o el estado. Los otros indicadores verdes requieren coincidencia de pantalla. En proveedores genéricos la orden de tirada de antebet se envía mediante Space; el resultado queda pendiente de verificación si el proveedor no permite confirmar su finalización. No todos los juegos implementan ese atajo.

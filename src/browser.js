@@ -422,7 +422,14 @@ export class BrowserEngine {
         session.antebetFlow={phase:'activate'};
         await this.clickMark(session,parentCapture,{...mark,kind:'click'},{onStarted:()=>{session.antebetFlow.phase='verify';}});
       }
-      session.manualReason='Antebet pulsado: verificá su activación y marcá la tirada. Este proveedor requiere revisión manual.';
+      if(session.antebetFlow.phase==='verify'){
+        // The operator explicitly marked this coordinate as antebet + one spin.
+        // Persist the phase before input so recovering a capture cannot spin twice.
+        session.antebetFlow.phase='wait-spin';session.antebetFlow.spinInput='Space';
+        await session.page.keyboard.press('Space');this.metrics.clicks++;
+        await this.waitForGameReady(session,{allowManual:true,timeoutMs:this.config.transitionTimeoutMs??180000});
+      }
+      session.manualReason='Antebet pulsado y una orden de tirada enviada. Revisá el resultado; la finalización todavía no está confirmada.';
       return;
     }
     const flow=session.antebetFlow||(session.antebetFlow={phase:'activate',path:controlForMark(parentCapture,mark)?.path||null});
@@ -530,7 +537,8 @@ export class BrowserEngine {
           }
           // Replay previous *navigation* steps only, never a previous irreversible purchase.
           for(const step of lineage.slice(0,-1)){
-            const previous=step.parent.capture_json?JSON.parse(step.parent.capture_json):{};
+            const savedPrevious=step.parent.capture_json?JSON.parse(step.parent.capture_json):{};
+            const previous=savedPrevious.manualReview?{...savedPrevious,replayableRoot:true,requiresLive:false}:savedPrevious;
             if(step.mark.kind==='antebet'){
               delete session.antebetFlow;await this.runAntebet(session,previous,step.mark);
               if(session.antebetFlow.phase!=='done')throw new ReplayError('BRANCH_REBUILD_FAILED','Antebet de la ruta pendiente');
@@ -538,7 +546,8 @@ export class BrowserEngine {
           }
         }
         const step=lineage.at(-1);
-        const parentInfo=step.parent.capture_json?JSON.parse(step.parent.capture_json):{};
+        const savedParentInfo=step.parent.capture_json?JSON.parse(step.parent.capture_json):{};
+        const parentInfo=!inherited&&savedParentInfo.manualReview?{...savedParentInfo,replayableRoot:true,requiresLive:false}:savedParentInfo;
         atTarget=true;
         delete session.antebetFlow;
         if(step.mark.kind==='antebet')await this.runAntebet(session,parentInfo,step.mark);
