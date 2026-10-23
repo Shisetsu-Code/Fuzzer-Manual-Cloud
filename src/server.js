@@ -85,9 +85,10 @@ async function handler(req,res){
     }
     const replayReport=p.match(/^\/api\/replay\/([\w-]+)\/report$/);
     if(req.method==='GET'&&replayReport){const job=replays.jobs.get(replayReport[1]);if(!job)return json(res,404,{error:'Replay not found'});res.setHeader('Content-Disposition',`attachment; filename="replay-${job.id}.json"`);return json(res,200,job);}
-    const archive=p.match(/^\/api\/network\/([\w-]+)\/(har|manifest)$/);
+    const archive=p.match(/^\/api\/network\/([\w-]+)\/(har|manifest|requests)$/);
     if(req.method==='GET'&&archive){const item=network.items.get(archive[1]);if(!item)return json(res,404,{error:'Archive not found'});
-      if(archive[2]==='manifest'){res.setHeader('Content-Disposition',`attachment; filename="${item.id}-acciones.json"`);const {file,...manifest}=item;return json(res,200,manifest);}
+      if(archive[2]==='requests'){if(!item.requestFile)return json(res,404,{error:'Requests index not available'});res.writeHead(200,{'Content-Type':'application/json','Content-Disposition':`attachment; filename="${item.id}-requests.json"`,'Cache-Control':'no-store'});await pipeline(createReadStream(item.requestFile),res);return;}
+      if(archive[2]==='manifest'){res.setHeader('Content-Disposition',`attachment; filename="${item.id}-acciones.json"`);const {file,requestFile,...manifest}=item;return json(res,200,manifest);}
       const ext=item.metadata.kind==='websocket'?'ws.jsonl':'har';res.writeHead(200,{'Content-Type':'application/json','Content-Disposition':`attachment; filename="${item.id}.${ext}"`,'Cache-Control':'no-store'});
       await pipeline(createReadStream(item.file),createGunzip(),res);return;
     }
