@@ -12,6 +12,7 @@ import {uploadNetwork} from '../cloud/network-upload.mjs';
 import {networkRoute} from '../cloud/network-store.js';
 import {replayRoute} from '../cloud/replay-route.mjs';
 import {ReplayManager} from '../src/replay-manager.js';
+import {RemoteBrowser} from '../src/remote-browser.js';
 
 async function directory(t){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'fm-network-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}).catch(()=>{}));return dir;}
 function storage(){const objects=new Map();return {async put(key,value,options={}){objects.set(key,{bytes:new Uint8Array(await new Response(value).arrayBuffer()),...options});},async head(key){return objects.get(key)||null;},async get(key){const item=objects.get(key);return item?{...item,body:new Blob([item.bytes]).stream(),json:async()=>JSON.parse(new TextDecoder().decode(item.bytes))}:null;},async list({prefix}){return {objects:[...objects.keys()].filter(key=>key.startsWith(prefix)).map(key=>({key})),truncated:false};}};}
@@ -63,6 +64,14 @@ test('replay restart polls the same immutable command and never resends uncertai
  const first=new ReplayManager(options);await first.init();first.jobs.set('job',{id:'job',status:'running',routes:[{route:{routeId:1},status:'dispatched',commandId:'original',workerId:'worker-har4'}]});await first.save(first.jobs.get('job'));first.stop();
  const resumed=new ReplayManager(options);await resumed.init();t.after(()=>resumed.stop());await resumed.pump();await resumed.pump();
  assert.equal(submissions,0);assert.equal(resumed.jobs.get('job').status,'complete-with-gaps');assert.equal(resumed.jobs.get('job').routes[0].commandId,'original');
+});
+
+test('new games cannot fall back to workers without traffic recording',()=>{
+ const browser=new RemoteBrowser({captureNetworkRequired:true},{getMark:()=>null});
+ browser.workers=[{id:'old-sequence3',capacity:8,live:[],active:0}];
+ assert.equal(browser.canPrepare({id:1,parent_task_id:null}),false);
+ browser.workers.push({id:'new-har4',capacity:8,live:[],active:0});
+ assert.deepEqual(browser.modernSlots().map(w=>w.id),['new-har4']);assert.equal(browser.canPrepare({id:1,parent_task_id:null}),true);
 });
 
 test('real Chromium HAR includes query, method, headers, post body and response body',async t=>{

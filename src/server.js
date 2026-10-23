@@ -26,6 +26,7 @@ import {exportHistory,historyCsv} from './history.js';
 import {importSelectedGames} from './manual-import.js';
 
 const config=loadConfig(),db=new CatalogDB(config.dataDir,{sqliteCacheMb:config.sqliteCacheMb});
+config.captureNetworkRequired=true;
 const refreshingTasks=new Set();
 const cache=new ImageCache(config.imageCacheMb*1024*1024);
 const browser=new RemoteBrowser(config,db);
@@ -126,7 +127,7 @@ async function handler(req,res){
     if(req.method==='POST'&&p==='/api/run'){
       const body=await receive(req);
       if(body.running){db.setSetting('fleet-recovery-enabled',true);if(body.fleet)db.setSetting('fleet-options',body.fleet);}
-      if(body.running&&!browser.workers.length){
+      if(body.running&&!browser.workers.some(w=>w.id.endsWith('-har4'))){
        if(Date.now()-db.getSetting('last-fleet-start',0)<120000)throw Error('La flota ya está arrancando; esperá a que aparezcan los workers.');
        await launchFleet(browser.client.clientId,body.fleet||{});db.setSetting('last-fleet-start',Date.now());
       }
