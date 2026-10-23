@@ -300,3 +300,13 @@ test('Sweet Bonanza FSWindows start and result controls identify a bonus and its
   assert.equal(captureState(view('UNKNOWN',[control('StopSpin_Button')])),'UNKNOWN');
   assert.equal(captureState(view('UNKNOWN',[control('Game/Reels/FSWindows/FSStart/ButtonContinue'),control(yes)])),'CONFIRM');
 });
+
+
+test('cloud roots keep the loading page alive so the operator can wait without replay',async t=>{
+ const {db,root}=fixture(t),unknown={...view('UNKNOWN',[]),frameUrl:'https://demogamesfree.pragmaticplay.net/fixture'};
+ const f=engineFor(db,unknown,unknown);f.engine.config.retainRoots=true;f.session.manualReason='Carga pendiente';
+ f.engine.screenshot=async()=>({file:'fixture.jpg',capture:{...unknown,manualReview:true}});
+ const result=await f.engine.prepare(root);
+ assert.equal(result.live,true);assert.equal(result.capture.requiresLive,true);assert.equal(result.capture.replayableRoot,undefined);
+ assert.equal(f.engine.live.get(root.id),f.session);assert.equal(f.closed(),0);assert.equal(f.clicks(),0);
+});

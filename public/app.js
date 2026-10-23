@@ -267,5 +267,18 @@ async function loadProviders(){api('/api/providers').then(({providers})=>{for(co
 $('cloud-stop').addEventListener('click',async()=>{if(!confirm('Los workers terminarán la operación actual y cerrarán las sesiones. Los bonus pendientes no se repetirán. ¿Apagar?'))return;try{await api('/api/cloud/stop','POST',{});toast('Apagado solicitado; terminando operaciones activas.');}catch(e){toast(e.message,true);}});
 
 
-$('cloud-refresh').addEventListener('click',async()=>{const item=getCurrent();if(!item||store.review)return;if(store.marks.length)return toast('Guardá o quitá tus marcas antes de actualizar.',true);try{$('cloud-refresh').disabled=true;await api(`/api/tasks/${item.id}/refresh`,'POST',{});await refresh();}catch(e){toast(e.message,true);}finally{$('cloud-refresh').disabled=false;}});
+let captureRefreshBusy=false;
+async function updateCapture(waitSeconds=0){
+ const item=getCurrent();if(!item||store.review||captureRefreshBusy)return;
+ if(store.marks.length)return toast('Guardá o quitá tus marcas antes de actualizar.',true);
+ captureRefreshBusy=true;$('cloud-refresh').disabled=true;$('cloud-wait').disabled=true;
+ const button=$('cloud-wait'),label=button.textContent;button.textContent=waitSeconds?'Esperando nueva captura…':'Actualizando captura…';
+ toast(waitSeconds?`Se dará ${waitSeconds} segundos más al juego, sin hacer clic.`:'Actualizando captura, sin hacer clic.');
+ try{await api(`/api/tasks/${item.id}/refresh`,'POST',{waitSeconds});store.imageKeep.delete(item.id);await refresh();}
+ catch(e){toast(e.message,true);}
+ finally{captureRefreshBusy=false;$('cloud-refresh').disabled=false;button.disabled=false;button.textContent=label;}
+}
+$('cloud-refresh').addEventListener('click',()=>updateCapture());
+$('cloud-wait').addEventListener('click',()=>updateCapture(Number($('cloud-wait-seconds').value)));
+
 init();

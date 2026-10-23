@@ -50,10 +50,13 @@ export class RemoteBrowser {
   await this.client.submit(id,{op:'prepare',task:taskData(task),lineage},affinity);
   return this.waitForResult(id,task);
  }
- async refresh(task){
-  const capture=captureOf(task);if(!capture.remoteWorker||!this.hasLive(task.id))throw Error('La captura está archivada; no hay una sesión viva para actualizar.');
+ async refresh(task,{waitSeconds=0}={}){
+  if(!Number.isInteger(waitSeconds)||waitSeconds<0||waitSeconds>60)throw Error("La espera debe ser de 0 a 60 segundos");
+  const capture=captureOf(task),live=this.hasLive(task.id);
+  if(!this.workers.length)throw Error('No hay workers activos. Encendé la flota antes de pedir otra captura.');
+  if(!live&&task.parent_task_id)throw Error('La sesión de esta operación terminó. No se repiten compras ni tiradas.');
   const id=`${this.client.clientId}:observe:${task.id}:${randomUUID()}`;
-  await this.client.submit(id,{op:'observe',taskId:task.id},capture.remoteWorker);
+  await this.client.submit(id,{op:'observe',taskId:task.id,waitSeconds,...(!live?{rootTask:taskData(task)}:{})},live?capture.remoteWorker:null);
   return this.waitForResult(id,task);
  }
  async waitForResult(id,task){

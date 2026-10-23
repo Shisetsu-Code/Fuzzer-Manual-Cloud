@@ -93,7 +93,7 @@ async function handler(req,res){
       scheduler.setPause(!Boolean(body.running));return json(res,200,{paused:scheduler.paused});
     }
     const refresh=p.match(/^\/api\/tasks\/(\d+)\/refresh$/);
-    if(req.method==='POST'&&refresh){const id=Number(refresh[1]),task=db.getTask(id);if(task?.status!=='ready')throw Error('La captura ya fue clasificada');const result=await browser.refresh(task);db.ready(id,{capture_file:result.file,capture:result.capture});cache.invalidate(result.file);return json(res,200,{ok:true});}
+    if(req.method==='POST'&&refresh){const id=Number(refresh[1]),task=db.getTask(id);if(task?.status!=='ready')throw Error('La captura ya fue clasificada');const body=await receive(req);const result=await browser.refresh(task,{waitSeconds:body.waitSeconds??0});db.ready(id,{capture_file:result.file,capture:result.capture});cache.invalidate(result.file);return json(res,200,{ok:true});}
     const commit=p.match(/^\/api\/tasks\/(\d+)\/commit$/);
     if(req.method==='POST'&&commit){
       const id=Number(commit[1]);const data=await receive(req);

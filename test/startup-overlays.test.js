@@ -6,7 +6,7 @@ import {BrowserEngine} from '../src/browser.js';
 import {readEntryIssue} from '../src/entry-issues.js';
 
 test('custom provider age and cookie controls dismiss only explicit entry notices',async()=>{
- const browser=await chromium.launch({headless:true});
+ const browser=await chromium.launch({...(process.env.CI?{channel:'chrome'}:{}),headless:true});
  try{const page=await browser.newPage();
   for(const [html,expected] of [
    ['<div class="popup"><p>Please verify that you are over 18 years old</p><div onclick="this.parentElement.remove()">YES, I AM OVER 18</div></div>',{cookies:0,age:1}],
@@ -22,7 +22,7 @@ test('custom provider age and cookie controls dismiss only explicit entry notice
 });
 
 test('entry issues distinguish security blocks and missing pages from a game or hidden contact form',async()=>{
- const browser=await chromium.launch({headless:true});
+ const browser=await chromium.launch({...(process.env.CI?{channel:'chrome'}:{}),headless:true});
  try{const page=await browser.newPage();for(const [html,expected] of [
   ['<h1>Performing security verification</h1><p>Verify you are human</p>','HUMAN_VERIFICATION'],
   ['<h1>Access Denied</h1>','ACCESS_DENIED'],['<h1>Oops! Page Not Found</h1>','PAGE_NOT_FOUND'],
@@ -34,7 +34,7 @@ test('entry issues distinguish security blocks and missing pages from a game or 
 });
 
 test('a slow demo launch button is clicked once instead of toggling its modal closed',async()=>{
- const browser=await chromium.launch({headless:true});
+ const browser=await chromium.launch({...(process.env.CI?{channel:'chrome'}:{}),headless:true});
  try{const page=await browser.newPage();
   await page.route('https://www.thunderkick.com/**',route=>route.fulfill({contentType:'text/html',body:'<button onclick="window.clicks=(window.clicks||0)+1;window.opened=window.opened?0:Date.now()">Play Game</button>'}));
   const engine=new BrowserEngine({entryTimeoutMs:6000},null);
@@ -46,7 +46,7 @@ test('a slow demo launch button is clicked once instead of toggling its modal cl
 });
 
 test('embedded demo is centered fully, while a hidden game modal is ignored',async()=>{
- const browser=await chromium.launch({headless:true});
+ const browser=await chromium.launch({...(process.env.CI?{channel:'chrome'}:{}),headless:true});
  try{const page=await browser.newPage({viewport:{width:1280,height:720}}),url='https://3oaks.com/game/fixture';
   await page.route('https://3oaks.com/**',route=>route.fulfill({contentType:'text/html',body:route.request().url().includes('/api/')?'<style>html,body{margin:0;height:100%}canvas{width:100%;height:100%}</style><canvas></canvas>':'<div style="height:500px"></div><iframe style="width:920px;height:572px;border:0" src="/api/v1/games/fixture/play"></iframe><div style="height:500px"></div>'}));
   await page.goto(url);await page.frameLocator('iframe').locator('canvas').waitFor();
@@ -58,7 +58,7 @@ test('embedded demo is centered fully, while a hidden game modal is ignored',asy
 });
 
 test('server-rendered launch buttons wait for client handlers before the only click',async()=>{
- const browser=await chromium.launch({headless:true});
+ const browser=await chromium.launch({...(process.env.CI?{channel:'chrome'}:{}),headless:true});
  try{const page=await browser.newPage();
   await page.route('https://amusnetgaming.com/**',route=>route.fulfill({contentType:'text/html',body:'<button id="demo">Play Demo</button><script>setTimeout(()=>document.getElementById("demo").onclick=()=>window.opened=true,500)</script>'}));
   const engine=new BrowserEngine({entryTimeoutMs:2800,entryLaunchDelayMs:800},null);

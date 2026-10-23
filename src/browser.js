@@ -547,11 +547,11 @@ export class BrowserEngine {
       const result=await this.screenshot(session,task.id,{rootMode:mode,manualReason:session.manualReason});
       // Initial manual photos can be archived without keeping a browser alive.
       // A later operator click reopens the root and validates its pixels first.
-      if(!lineage.length&&session.manualReason&&result.capture.state!=='BONUS'){
+      if(!this.config.retainRoots&&!lineage.length&&session.manualReason&&result.capture.state!=='BONUS'){
         result.capture.replayableRoot=true;requiresLive=false;
       }
       if(session.antebetFlow)result.capture.antebet={...session.antebetFlow};
-      requiresLive=requiresLive||inherited||captureNeedsLive(result.capture);
+      requiresLive=requiresLive||inherited||captureNeedsLive(result.capture)||Boolean(this.config.retainRoots&&!lineage.length);
       if(requiresLive&&!inherited&&!this.reservations.has(task.id)&&this.live.size+this.reservations.size>=(this.config.maxLive??4)){
         this.pendingLiveRoots.add(task.id);throw new ReplayError('LIVE_SLOTS_FULL');
       }

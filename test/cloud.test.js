@@ -86,3 +86,20 @@ test('the local registry counts a cloud purchase only after the result was close
  const close=db.commit(confirm,[{x:.5,y:.5,kind:'continue'}]).children[0].taskId;
  ready(close,'BASE','completed',true);assert.equal(db.gameProgress()[0].purchases.completed,1);
 });
+
+
+test('waiting for a live screenshot preserves worker affinity and sends no click',async()=>{
+ const sent=[],client={clientId:'pc-1',submit:async(...args)=>sent.push(args)};
+ const browser=new RemoteBrowser({}, {}, {client});browser.workers=[{id:'w-1',live:[9]}];
+ browser.waitForResult=async()=>({ok:true});
+ await browser.refresh({id:9,parent_task_id:2,capture_json:JSON.stringify({remoteWorker:'w-1'})},{waitSeconds:30});
+ assert.equal(sent[0][1].op,'observe');assert.equal(sent[0][1].waitSeconds,30);assert.equal(sent[0][2],'w-1');assert.equal(sent[0][1].rootTask,undefined);
+ await assert.rejects(()=>browser.refresh({id:9},{waitSeconds:61}),/espera/);
+});
+test('archived initial screenshots may reopen but a lost purchase session is never replayed',async()=>{
+ const sent=[],client={clientId:'pc-1',submit:async(...args)=>sent.push(args)};
+ const browser=new RemoteBrowser({}, {}, {client});browser.workers=[{id:'w-2',live:[]}];browser.waitForResult=async()=>({});
+ await browser.refresh({id:4,parent_task_id:null,url:'https://demo.example/game'},{waitSeconds:10});
+ assert.equal(sent[0][1].rootTask.id,4);assert.equal(sent[0][2],null);
+ await assert.rejects(()=>browser.refresh({id:5,parent_task_id:4}),/No se repiten/);assert.equal(sent.length,1);
+});

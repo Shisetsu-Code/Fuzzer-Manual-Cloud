@@ -18,7 +18,7 @@
     <label>Workers <input id="cloud-workers" type="number" min="1" max="20" value="4"></label>
     <label>Juegos por worker <input id="cloud-games" type="number" min="1" max="8" value="8"></label>
     <label>Duración (min) <input id="cloud-minutes" type="number" min="5" max="300" value="60"></label>
-    <button type="button" id="cloud-stop">Apagar workers</button><span>PC: <code id="cloud-client-id"></code></span><strong id="cloud-phase"></strong><button type="button" id="cloud-refresh">Actualizar captura sin hacer clic</button>
+    <button type="button" id="cloud-stop">Apagar workers</button><span>PC: <code id="cloud-client-id"></code></span><strong id="cloud-phase"></strong><label>Dar más tiempo <select id="cloud-wait-seconds"><option value="10">10 segundos</option><option value="30" selected>30 segundos</option><option value="60">60 segundos</option></select></label><button type="button" id="cloud-wait">Sigue cargando · esperar y capturar</button><button type="button" id="cloud-refresh">Actualizar captura sin hacer clic</button>
   </section>
   <main class="layout">
     <aside class="sidebar">

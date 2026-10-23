@@ -94,3 +94,9 @@ El código y el workflow manual-workers.yml se publican en Fuzzer-Manual-Cloud.
 Las capturas permanecen en R2 privado y en data/shots de tu PC; SQLite, .env y
 credenciales cifradas están excluidos de Git. La flota se ejecuta directamente
 en este repositorio, sin depender del workflow del Hybrid anterior.
+
+
+### Si una captura todavía está cargando
+Elegí 10, 30 o 60 segundos y pulsá **Sigue cargando · esperar y capturar**. El worker espera sobre la misma página y devuelve una imagen nueva, sin hacer clic, sin recargar y sin cerrar el camino. Podés repetirlo cuantas veces sea necesario. **Actualizar captura sin hacer clic** obtiene una imagen inmediata.
+
+Las sesiones iniciales permanecen abiertas dentro del límite de juegos por worker. Si una captura inicial antigua ya fue archivada, se abre de nuevo solamente esa pantalla inicial; una compra o tirada perdida nunca se repite automáticamente. No marques botones sobre una pantalla de carga: esperá la nueva captura. Los workers deben estar encendidos.
