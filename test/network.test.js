@@ -11,6 +11,7 @@ import {NetworkClient} from '../src/network-client.js';
 import {uploadNetwork} from '../cloud/network-upload.mjs';
 import {networkRoute} from '../cloud/network-store.js';
 import {replayRoute} from '../cloud/replay-route.mjs';
+import {ReplayManager} from '../src/replay-manager.js';
 
 async function directory(t){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'fm-network-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}).catch(()=>{}));return dir;}
 function storage(){const objects=new Map();return {async put(key,value,options={}){objects.set(key,{bytes:new Uint8Array(await new Response(value).arrayBuffer()),...options});},async head(key){return objects.get(key)||null;},async get(key){const item=objects.get(key);return item?{...item,body:new Blob([item.bytes]).stream(),json:async()=>JSON.parse(new TextDecoder().decode(item.bytes))}:null;},async list({prefix}){return {objects:[...objects.keys()].filter(key=>key.startsWith(prefix)).map(key=>({key})),truncated:false};}};}
@@ -44,6 +45,24 @@ test('reconstruction executes original ordered marks and stops on a mismatch',as
  const route={jobId:'job',routeId:1,gameId:42,steps:[{sourceCapture:{state:'BUY_MENU'},mark:{id:1,kind:'click'}},{sourceCapture:{},mark:{id:2,kind:'sequence'}}]};
  const report=await replayRoute(engine,route);assert.deepEqual(calls,['menu',1,2,'close']);assert.equal(report.status,'replayed');assert.equal(report.originalOutcomeGuaranteed,false);
  engine.clickMark=async()=>{throw Error('VISUAL_STATE_MISMATCH');};calls.length=0;const partial=await replayRoute(engine,route);assert.equal(partial.status,'partial');assert.equal(calls.at(-1),'close');assert.equal(partial.steps.length,1);
+});
+
+test('concurrent downloads share the same operation and keep corruption out of exports',async t=>{
+ const dir=await directory(t);let reads=0;const client={clientId:'pc',call:async(route,options)=>{
+  reads++;await new Promise(resolve=>setTimeout(resolve,5));return options?.raw?new Response('corrupt'):{metadata:{kind:'har'},parts:[{size:7,sha256:'invalid'}]};
+ }};
+ const network=new NetworkClient({dataDir:dir},client);await network.start();
+ const results=await Promise.allSettled([network.download('archive'),network.download('archive')]);
+ assert.ok(results.every(r=>r.status==='rejected'&&/checksum/.test(r.reason.message)));assert.equal(reads,2);assert.equal(network.items.size,0);
+ await assert.rejects(()=>fs.stat(path.join(dir,'network','archive.har.gz')));
+});
+
+test('replay restart polls the same immutable command and never resends uncertain actions',async t=>{
+ const dir=await directory(t);let submissions=0;const browser={workers:[{id:'worker-har4',capacity:8,live:[]}],client:{submit:async()=>{submissions++;},read:async()=>({state:'uncertain',error:'Worker expired'})}};
+ const options={config:{dataDir:dir},db:{},scheduler:{setPause(){}},network:{download:async()=>{}},browser};
+ const first=new ReplayManager(options);await first.init();first.jobs.set('job',{id:'job',status:'running',routes:[{route:{routeId:1},status:'dispatched',commandId:'original',workerId:'worker-har4'}]});await first.save(first.jobs.get('job'));first.stop();
+ const resumed=new ReplayManager(options);await resumed.init();t.after(()=>resumed.stop());await resumed.pump();await resumed.pump();
+ assert.equal(submissions,0);assert.equal(resumed.jobs.get('job').status,'complete-with-gaps');assert.equal(resumed.jobs.get('job').routes[0].commandId,'original');
 });
 
 test('real Chromium HAR includes query, method, headers, post body and response body',async t=>{
