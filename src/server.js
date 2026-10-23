@@ -54,7 +54,7 @@ const staticPaths=new Map([['/', ['index.html','text/html; charset=utf-8']],['/a
 
 function json(res,status,body){const content=Buffer.from(JSON.stringify(body));res.writeHead(status,{
   'Content-Type':'application/json; charset=utf-8','Content-Length':content.length,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(content);}
-function error(res,e){const msg=String(e.message||e);const status=/not found/i.test(msg)?404:/already cataloged|not ready/i.test(msg)?409:400;json(res,status,{error:msg});}
+function error(res,e){if(res.headersSent){res.destroy();return;}const msg=String(e.message||e);const status=/not found/i.test(msg)?404:/already cataloged|not ready/i.test(msg)?409:400;json(res,status,{error:msg});}
 async function receive(req){
   const parts=[];let size=0;
   for await(const part of req){size+=part.length;if(size>4*1024*1024)throw Error('Request exceeds 4 MiB');parts.push(part);}
