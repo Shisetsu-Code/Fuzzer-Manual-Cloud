@@ -48,7 +48,13 @@ export class RemoteBrowser {
   const lineage=this.db.lineage(task.id).map(s=>({parent:taskData(s.parent),mark:s.mark}));
   const id=`${this.client.clientId}:task:${task.id}`;
   await this.client.submit(id,{op:'prepare',task:taskData(task),lineage},affinity);
-  return this.waitForResult(id,task);
+  const prepared=await this.waitForResult(id,task);
+  if(!task.parent_task_id&&prepared.live&&!prepared.capture.initialLoadWaitApplied){
+   const waitId=`${this.client.clientId}:initial-wait:${task.id}`;
+   await this.client.submit(waitId,{op:'observe',taskId:task.id,waitSeconds:60},prepared.capture.remoteWorker);
+   const final=await this.waitForResult(waitId,task);final.capture.initialLoadWaitApplied=true;return final;
+  }
+  return prepared;
  }
  async refresh(task,{waitSeconds=0}={}){
   if(!Number.isInteger(waitSeconds)||waitSeconds<0||waitSeconds>60)throw Error("La espera debe ser de 0 a 60 segundos");

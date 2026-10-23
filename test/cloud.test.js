@@ -73,7 +73,7 @@ test('remote preparation downloads a JPEG on the PC and does not launch a local 
  const requests=[],client={clientId:'pc-1',submit:async(...args)=>requests.push(args),read:async()=>({state:'done',workerId:'w-1',result:{live:true,capture:{state:'BONUS'}}}),call:async()=>new Response(new Uint8Array([255,216,255,217]))};
  const db={getTask:()=>null,lineage:()=>[]};const browser=new RemoteBrowser({dataDir:dir},db,{client});
  const r=await browser.prepare({id:42,url:'https://www.pragmaticplay.fun/en/slots/candy-rush/'});
- assert.equal((await fs.readFile(r.file)).length,4);assert.equal(r.capture.remoteWorker,'w-1');assert.equal(requests[0][0],'pc-1:task:42');
+ assert.equal((await fs.readFile(r.file)).length,4);assert.equal(r.capture.remoteWorker,'w-1');assert.equal(requests[0][0],'pc-1:task:42');assert.equal(requests[1][1].waitSeconds,60);assert.equal(requests[1][2],'w-1');assert.equal(r.capture.initialLoadWaitApplied,true);
 });
 test('the local registry counts a cloud purchase only after the result was closed',async t=>{
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cloud-proof-')),db=new CatalogDB(dir);t.after(async()=>{db.close();await fs.rm(dir,{recursive:true,force:true});});

@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {loadConfig} from './config.js';
 import {CatalogDB} from './db.js';
 import {ImageCache} from './cache.js';
+import {describeQueue} from './queue-context.js';
 import {RemoteBrowser} from './remote-browser.js';
 import {launchFleet} from './fleet.js';
 import {captureOf,captureNeedsLive,captureCanBranch} from './actions.js';
@@ -19,6 +20,7 @@ import {exportHistory,historyCsv} from './history.js';
 import {importSelectedGames} from './manual-import.js';
 
 const config=loadConfig(),db=new CatalogDB(config.dataDir,{sqliteCacheMb:config.sqliteCacheMb});
+const refreshingTasks=new Set();
 const cache=new ImageCache(config.imageCacheMb*1024*1024);
 const browser=new RemoteBrowser(config,db);
 const scheduler=new Scheduler({db,browser,cache,workers:config.workers,rootWorkers:0,providerIds:Object.keys(PROVIDERS),previewCount:config.previewCount,readyGamesTarget:config.readyGamesTarget,
@@ -67,7 +69,7 @@ async function handler(req,res){
     if(req.method==='POST'&&reviewGame){const body=await receive(req);return json(res,200,db.setReview(Number(reviewGame[1]),body.review));}
     if(req.method==='GET'&&p==='/api/queue'){
       const limit=Math.min(250,Math.max(1,Number(u.searchParams.get('limit')||100)||100));
-      return json(res,200,{items:db.listReady(limit,u.searchParams.get('provider')||null).map(item=>({...item,live:browser.hasLive(item.id)})),problems:db.listProblems(30)});
+      return json(res,200,{items:describeQueue(db,db.listReady(limit,u.searchParams.get('provider')||null)).map(item=>({...item,live:browser.hasLive(item.id)})),problems:db.listProblems(30)});
     }
     const image=p.match(/^\/api\/images\/(\d+)$/);
     if(req.method==='GET'&&image){
@@ -93,10 +95,10 @@ async function handler(req,res){
       scheduler.setPause(!Boolean(body.running));return json(res,200,{paused:scheduler.paused});
     }
     const refresh=p.match(/^\/api\/tasks\/(\d+)\/refresh$/);
-    if(req.method==='POST'&&refresh){const id=Number(refresh[1]),task=db.getTask(id);if(task?.status!=='ready')throw Error('La captura ya fue clasificada');const body=await receive(req);const result=await browser.refresh(task,{waitSeconds:body.waitSeconds??0});db.refreshReady(id,result);cache.invalidate(result.file);return json(res,200,{ok:true});}
+    if(req.method==='POST'&&refresh){const id=Number(refresh[1]),task=db.getTask(id);if(task?.status!=='ready')throw Error('La captura ya fue clasificada');if(refreshingTasks.has(id))throw Error('Esta captura ya está esperando');const body=await receive(req);refreshingTasks.add(id);try{const result=await browser.refresh(task,{waitSeconds:body.waitSeconds??0});db.refreshReady(id,result);cache.invalidate(result.file);return json(res,200,{ok:true});}finally{refreshingTasks.delete(id);}}
     const commit=p.match(/^\/api\/tasks\/(\d+)\/commit$/);
     if(req.method==='POST'&&commit){
-      const id=Number(commit[1]);const data=await receive(req);
+      const id=Number(commit[1]);if(refreshingTasks.has(id))throw Error('Esperá la captura nueva antes de enviar clics');const data=await receive(req);
       const source=captureOf(db.getTask(id));
       if(source.flowCompletion?.version&&captureNeedsLive(source)&&!captureCanBranch(source)&&data.marks?.length>1)throw Error('Esta pantalla usa una sesión viva: elegí una opción por vez. En un menú inicial podés marcar varias.');
       const result=db.commit(id,data.marks);

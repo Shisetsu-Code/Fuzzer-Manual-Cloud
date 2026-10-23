@@ -12,7 +12,7 @@ if(!/^https:\/\//.test(endpoint||'')||!token||!clientId)throw Error('Falta confi
 const workerId=`gh-${process.env.GITHUB_RUN_ID||'test'}-${process.env.GITHUB_RUN_ATTEMPT||'1'}-${process.env.WORKER_INDEX||'1'}`;
 const capacity=Number(process.env.GAMES_PER_WORKER||8);if(!Number.isInteger(capacity)||capacity<1||capacity>8)throw Error('Capacidad inválida');
 const budget=Number(process.env.WORKER_MINUTES||60);if(!Number.isInteger(budget)||budget<1||budget>300)throw Error('Duración inválida');
-const config={...loadConfig(),headless:true,retainRoots:true,maxLive:capacity,gpuMode:'default',dataDir:path.resolve('.local',workerId),transitionTimeoutMs:600000};
+const config={...loadConfig(),headless:true,retainRoots:true,initialLoadWaitMs:60000,maxLive:capacity,gpuMode:'default',dataDir:path.resolve('.local',workerId),transitionTimeoutMs:600000};
 const tasks=new Map(),lineages=new Map(),db={getTask:id=>tasks.get(id),lineage:id=>lineages.get(id)||[]};
 const engine=new BrowserEngine(config,db,{chromiumLoader:async()=>{
  const {chromium}=await import('playwright');return {chromium:{launch:options=>chromium.launch({...options,channel:'chrome',args:[...(options.args||[]),'--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']})}};

@@ -310,3 +310,10 @@ test('cloud roots keep the loading page alive so the operator can wait without r
  assert.equal(result.live,true);assert.equal(result.capture.requiresLive,true);assert.equal(result.capture.replayableRoot,undefined);
  assert.equal(f.engine.live.get(root.id),f.session);assert.equal(f.closed(),0);assert.equal(f.clicks(),0);
 });
+
+
+test('fresh sessions wait for their configured initial loading window before returning',async()=>{
+ const engine=new BrowserEngine({initialLoadWaitMs:35},{ });engine.start=async()=>{};engine.resolveEntry=async url=>url;engine.enter=async()=>{};
+ engine.browser={newContext:async()=>({newPage:async()=>({on(){}})})};
+ const start=Date.now();const session=await engine.fresh('https://www.pragmaticplay.fun/en/slots/candy-rush/');assert.ok(Date.now()-start>=30);assert.equal(session.initialLoadWaitApplied,false);
+});

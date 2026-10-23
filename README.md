@@ -100,3 +100,12 @@ en este repositorio, sin depender del workflow del Hybrid anterior.
 Elegí 10, 30 o 60 segundos y pulsá **Sigue cargando · esperar y capturar**. El worker espera sobre la misma página y devuelve una imagen nueva, sin hacer clic, sin recargar y sin cerrar el camino. Podés repetirlo cuantas veces sea necesario. **Actualizar captura sin hacer clic** obtiene una imagen inmediata.
 
 Las sesiones iniciales permanecen abiertas dentro del límite de juegos por worker. Si una captura inicial antigua ya fue archivada, se abre de nuevo solamente esa pantalla inicial; una compra o tirada perdida nunca se repite automáticamente. No marques botones sobre una pantalla de carga: esperá la nueva captura. Los workers deben estar encendidos.
+
+
+### Juegos, operaciones y clics anteriores
+La cola tiene una sola tarjeta por juego. Si un juego tiene varias operaciones pendientes, elegí la operación desde el selector sobre la imagen. Solo se muestra una captura de la operación elegida; al actualizarla, reemplaza la anterior. El encabezado identifica proveedor, juego, operación y captura. También indica si es un inicio independiente, una continuación vinculada o una ruta vinculada en una sesión nueva. **Ver pantalla anterior** permite revisar su origen.
+
+Tras enviar marcas, la vista espera la siguiente captura del mismo juego. Para trabajar en otro mientras tanto, seleccioná su tarjeta. Los clics anteriores ejecutados aparecen en gris únicamente cuando coinciden la imagen, el estado y las dimensiones; las marcas nuevas son verdes. El historial por juego conserva los clics de todas las rutas con su estado: ejecutado, pendiente, no ejecutado o sin confirmar. Una tirada iniciada no implica que haya terminado ni que una compra esté completada. Si el proveedor no identifica el control, se registra como clic manual y se conserva su nota.
+
+
+Los juegos nuevos tienen **un minuto de carga por defecto** antes de entregar la primera captura. Las continuaciones no reciben una espera extra obligatoria. La opción de espera adicional también arranca en 60 segundos y funciona por juego: podés pedir una recaptura en A, seleccionar B y pedir otra sin esperar a A. Las tarjetas muestran «Esperando captura…» y los clics quedan bloqueados solo en la operación que está actualizándose. La flota que ya estaba abierta conserva sus sesiones y recibe esta espera inicial desde el cliente, sin cerrar los juegos.

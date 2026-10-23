@@ -3,17 +3,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-function ui(){
+function ui(fetcher){
   const nodes=new Map();
   const element=()=>({style:{},dataset:{},events:{},children:[],classList:{toggle(){}},
     addEventListener(type,fn){this.events[type]=fn;},append(...children){this.children.push(...children);},
     replaceChildren(){this.children=[];},getBoundingClientRect(){return {left:0,top:0,width:1000,height:600};}});
   const get=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
-  const context=vm.createContext({document:{getElementById:get,createElement:element,createTextNode:t=>t,querySelectorAll:()=>[],addEventListener(){}},setTimeout(){},clearTimeout(){}});
+  const context=vm.createContext({fetch:fetcher,document:{getElementById:get,createElement:element,createTextNode:t=>t,querySelectorAll:()=>[],addEventListener(){}},setTimeout(){},clearTimeout(){}});
   const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/init\(\);\s*$/,'');
   vm.runInContext(source+'\nglobalThis.state=store;',context);
   context.state.items=[{id:1}];context.state.selectedId=1;context.state.features={antebet:true,freeClicks:true,finish:true,finishGame:true};
-  return {get,state:context.state,renderProgress:context.renderProgress,antebetNotice:context.antebetNotice,canFinishGame:context.canFinishGame,undo:context.undo};
+  return {context,updateCapture:context.updateCapture,get,state:context.state,renderQueue:context.renderQueue,selectFirst:context.selectFirst,renderPins:context.renderPins,renderProgress:context.renderProgress,antebetNotice:context.antebetNotice,canFinishGame:context.canFinishGame,undo:context.undo};
 }
 
 test('left and right clicks mark several independent purchase and antebet options on one photo',()=>{
@@ -92,4 +92,28 @@ test('finalization requires all other paths resolved and no unsaved clicks',()=>
   assert.equal(get('finish-btn').disabled,true);undo();assert.equal(get('finish-btn').disabled,false);
   const html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
   assert.doesNotMatch(html,/<b>Clics libres<\/b>|Cada punto crea una rama/);
+});
+
+
+test('the queue shows one card per game even when there are multiple independent operations',()=>{
+ const {get,state,renderQueue}=ui();state.items=[{id:3,game_id:1,slug:'game-a',provider:'test'},{id:4,game_id:1,slug:'game-a',provider:'test'},{id:5,game_id:2,slug:'game-b',provider:'test'}];state.selectedId=3;
+ renderQueue();assert.equal(get('queue-list').children.length,2);assert.match(get('queue-counter').textContent,/2 juegos · 3 operaciones/);
+});
+test('waiting for the next result never silently changes to another game',()=>{
+ const {state,selectFirst}=ui();state.items=[{id:5,game_id:2}];state.focusGameId=1;state.selectedId=null;selectFirst();assert.equal(state.selectedId,null);
+ state.items.push({id:6,game_id:1});selectFirst();assert.equal(state.selectedId,6);
+});
+test('executed clicks are gray read-only pins and never become new submitted marks',()=>{
+ const {get,state,renderPins}=ui();state.items[0].previousClicks=[{id:8,x:.3,y:.4,label:'Tirada normal',onRoute:true}];renderPins();
+ assert.equal(get('pins').children.length,1);assert.equal(get('pins').children[0].className,'pin previous-click');assert.equal(state.marks.length,0);assert.match(get('pins').children[0].title,/ya ejecutado/);
+});
+
+
+test('waiting on one game does not block requesting a screenshot on a second game',async()=>{
+ const pending=[];const {context,state,updateCapture}=ui(async(url,options)=>new Promise(resolve=>pending.push({url,options,resolve})));
+ context.refresh=async()=>{};state.items=[{id:1,game_id:1,slug:'a'},{id:2,game_id:2,slug:'b'}];state.selectedId=1;
+ const first=updateCapture(60);state.selectedId=2;const second=updateCapture(30);
+ assert.equal(pending.length,2);assert.equal(state.refreshing.size,2);assert.equal(JSON.parse(pending[0].options.body).waitSeconds,60);
+ pending[0].resolve({ok:true,json:async()=>({})});await first;assert.equal(state.refreshing.has(1),false);assert.equal(state.refreshing.has(2),true);
+ pending[1].resolve({ok:true,json:async()=>({})});await second;assert.equal(state.refreshing.size,0);
 });

@@ -194,6 +194,7 @@ export class CatalogDB {
     this.db.prepare("UPDATE tasks SET status='ready',capture_file=?,capture_json=?,error=NULL,updated_at=datetime('now') WHERE id=? AND status='preparing'").run(capture_file,JSON.stringify(capture),id);
   }
   refreshReady(id,{file,capture}){
+    const previous=captureOf(this.getTask(id));capture={...capture,actionApplied:previous.actionApplied};
     const result=this.db.prepare("UPDATE tasks SET capture_file=?,capture_json=?,updated_at=datetime('now') WHERE id=? AND status='ready'").run(file,JSON.stringify(capture),id);
     if(result.changes!==1)throw Error('La captura ya fue clasificada');
   }

@@ -76,7 +76,11 @@ export class BrowserEngine {
       if(session.events.length>=160)session.events.shift();
       session.events.push({url:u,status:response.status(),at:Date.now()});
     });
-    try{await this.enter(session);return session;}
+    try{await this.enter(session);
+      const remaining=Math.max(0,(this.config.initialLoadWaitMs||0)-(Date.now()-session.created));
+      if(remaining)await sleep(remaining);
+      session.initialLoadWaitApplied=(this.config.initialLoadWaitMs||0)>=60000;
+      return session;}
     catch(e){await this.dispose(session);throw e;}
   }
   async dispose(session){
@@ -480,7 +484,7 @@ export class BrowserEngine {
     if(manualReason)session.manualToken ||= randomUUID();
     return {file:target,capture:{visualKey,clip:view.clip,width:view.clip.width,height:view.clip.height,actionApplied,
       ...(manualReason?{manualReview:true,manualReason,manualToken:session.manualToken,entryReview:!!view.entryReview}:{}),
-      startupVersion:2,gameRunning:session.genericRunning===true||!['INTRO','UNKNOWN'].includes(view.state),entryIssue:session.entryIssue||null,entryOverlaysVersion:1,rootMode,state:view.state,signature:view.signature,controls:view.controls,
+      initialLoadWaitApplied:session.initialLoadWaitApplied===true,startupVersion:2,gameRunning:session.genericRunning===true||!['INTRO','UNKNOWN'].includes(view.state),entryIssue:session.entryIssue||null,entryOverlaysVersion:1,rootMode,state:view.state,signature:view.signature,controls:view.controls,
       frameUrl:view.frameUrl,network:session.events.slice(-25),capturedAt:new Date().toISOString(),bytes:bytes.length}};
   }
   async prepare(task){
