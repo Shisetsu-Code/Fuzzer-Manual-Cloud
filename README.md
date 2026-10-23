@@ -9,7 +9,7 @@ mostrarlo y conserva las marcas, caminos e historial en SQLite.
 1. Abrí **Iniciar.cmd** y entrá a http://127.0.0.1:4180.
 2. **Importar**: pegá enlaces DEMO oficiales o cargá un TXT.
 3. Elegí workers, juegos por worker y duración; pulsá **Iniciar workers**.
-   Se necesita GitHub CLI autenticado con acceso a Hybrid-actions.
+   Se necesita GitHub CLI autenticado con acceso a este repositorio público.
 4. Clic izquierdo marca un punto; derecho prueba antebet. Podés marcar varios
    puntos de un menú inicial. **Espacio** guarda y avanza; **Z** deshace;
    **Shift+Espacio** vuelve a la foto anterior.
@@ -88,16 +88,9 @@ claims concurrentes, afinidad, expiración incierta, permisos, apagado cooperati
 descarga local y finalización del bonus. Una pérdida de sesión conserva la
 incidencia; una prueba nueva no se presenta como recuperación de la compra perdida.
 
-## Flota pública y programa privado
+## Repositorio público
 
-La facturación de GitHub impide jobs en el repo privado. La ejecución se hace en
-`Shisetsu-Code/Hybrid-actions`, workflow `manual-cloud-workers.yml`. Ese archivo
-público solo descarga un tar privado de R2, autenticado con un secreto específico,
-verifica su SHA-256 y ejecuta el programa. No se publica el código del fuzzer.
-El tar contiene únicamente `src/`, `cloud/`, package.json y package-lock.json
-del commit indicado: nunca datos, credenciales o archivos locales.
-
-Hybrid-actions usa la variable MANUAL_CLOUD_URL y el secreto
-MANUAL_CLOUD_WORKER_TOKEN, separados de las credenciales del Hybrid anterior.
-Los jobs del repo privado pueden figurar bloqueados por facturación; las pruebas
-locales y el workflow público de flota son la verificación operativa.
+El código y el workflow manual-workers.yml se publican en Fuzzer-Manual-Cloud.
+Las capturas permanecen en R2 privado y en data/shots de tu PC; SQLite, .env y
+credenciales cifradas están excluidos de Git. La flota se ejecuta directamente
+en este repositorio, sin depender del workflow del Hybrid anterior.
