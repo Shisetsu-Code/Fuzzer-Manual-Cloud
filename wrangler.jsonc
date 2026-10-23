@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fuzzer-manual-cloud",
+  "main": "cloud/coordinator.js",
+  "compatibility_date": "2026-10-23",
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fuzzer-manual-cloud",
+      "database_id": "0e5665be-159e-49d6-ae27-8e43e3958459",
+      "migrations_dir": "cloud/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "SHOTS",
+      "bucket_name": "fuzzer-manual-cloud-images"
+    }
+  ]
+}

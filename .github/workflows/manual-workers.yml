@@ -1,0 +1,76 @@
+name: Manual cloud browser workers
+on:
+  workflow_dispatch:
+    inputs:
+      client_id:
+        description: PC identifier shown by the local interface
+        required: true
+      workers:
+        description: Number of independent workers (1–20)
+        default: '4'
+        required: true
+      games_per_worker:
+        description: Simultaneous live games per worker (1–8)
+        default: '8'
+        required: true
+      duration_minutes:
+        description: Worker lifetime (5–300 minutes)
+        default: '60'
+        required: true
+      confirm_adult:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: manual-cloud-${{ inputs.client_id }}
+  cancel-in-progress: false
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      workers: ${{ steps.plan.outputs.workers }}
+    steps:
+      - id: plan
+        env:
+          CLIENT: ${{ inputs.client_id }}
+          COUNT: ${{ inputs.workers }}
+          GAMES: ${{ inputs.games_per_worker }}
+          MINUTES: ${{ inputs.duration_minutes }}
+          ADULT: ${{ inputs.confirm_adult }}
+        run: |
+          node - <<'JS'
+          const fs=require('fs');
+          const n=Number(process.env.COUNT),g=Number(process.env.GAMES),m=Number(process.env.MINUTES);
+          if(!/^[a-zA-Z0-9_.:-]{1,100}$/.test(process.env.CLIENT)||!Number.isInteger(n)||n<1||n>20||!Number.isInteger(g)||g<1||g>8||!Number.isInteger(m)||m<5||m>300||process.env.ADULT!=='true')throw Error('Invalid fleet parameters');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,'workers='+JSON.stringify(Array.from({length:n},(_,i)=>i+1))+'\n');
+          JS
+  worker:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        worker: ${{ fromJSON(needs.plan.outputs.workers) }}
+    env:
+      CLOUD_URL: ${{ vars.CLOUD_URL }}
+      CLOUD_WORKER_TOKEN: ${{ secrets.CLOUD_WORKER_TOKEN }}
+      CLOUD_CLIENT_ID: ${{ inputs.client_id }}
+      GAMES_PER_WORKER: ${{ inputs.games_per_worker }}
+      WORKER_MINUTES: ${{ inputs.duration_minutes }}
+      WORKER_INDEX: ${{ matrix.worker }}
+      CONFIRM_ADULT: ${{ inputs.confirm_adult }}
+      HEADLESS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: google-chrome --version
+      - run: node cloud/runner.mjs

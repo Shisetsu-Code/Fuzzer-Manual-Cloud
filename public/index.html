@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Fuzzer Manual Cloud — Catalogador de oleadas</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">F<span class="slash">/</span>M</span><div><b>Fuzzer Manual Cloud</b><small>Catalogador visual · DEMO</small></div></div>
+    <div class="top-stats"><span><b id="stat-ready">0/20</b> juegos preparados</span><span id="buffer-note"></span></div>
+    <div class="head-actions"><button id="progress-open">Registro</button><button id="import-open" class="primary">+ Importar URLs</button><button id="pause-btn">Iniciar workers</button><button id="settings-open" title="Atajos configurables">⚙ Configurar</button></div>
+  </header>
+  <section class="cloud-controls">
+    <label>Workers <input id="cloud-workers" type="number" min="1" max="20" value="4"></label>
+    <label>Juegos por worker <input id="cloud-games" type="number" min="1" max="8" value="8"></label>
+    <label>Duración (min) <input id="cloud-minutes" type="number" min="5" max="300" value="60"></label>
+    <button type="button" id="cloud-stop">Apagar workers</button><span>PC: <code id="cloud-client-id"></code></span><strong id="cloud-phase"></strong><button type="button" id="cloud-refresh">Actualizar captura sin hacer clic</button>
+  </section>
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="section-head"><div><h2>Cola de capturas</h2><small id="queue-counter">0 pendientes</small></div><button id="refresh-btn" title="Actualizar cola">↻</button></div>
+      <select id="provider-filter" aria-label="Proveedor"><option value="">Todos los proveedores</option></select>
+      <details class="provider-workers"><summary id="workers-summary">Workers por proveedor</summary><div id="workers-list"></div></details>
+      <div class="queue-list" id="queue-list"></div>
+      <div class="side-footer" id="buffer-state">Preparación automática en segundo plano</div>
+    </aside>
+    <section class="workspace">
+      <div class="photo-head"><div class="title-wrap"><div id="game-title">Sin fotografía seleccionada</div><div id="game-subtitle">Importá URLs e iniciá los workers para generar la cola</div></div><div id="photo-status" class="pill">COLA VACÍA</div></div>
+      <div class="photo-viewport" id="viewport">
+        <div id="empty" class="empty-state"><span class="big-icon">▧</span><h2>Capturas listas para catalogar</h2><p>Los navegadores trabajan por separado. Una vez preparada, cada fotografía aparece aquí sin esperas de carga.</p></div>
+        <div id="image-wrap" class="image-wrap" hidden><img id="shot" alt="Captura del juego DEMO" draggable="false"><div id="pins" class="pins"></div></div>
+      </div>
+      <div class="photo-footer"><span id="cursor" hidden></span><span id="marks-count">0 clics</span><span id="hint">Clic para marcar · Espacio para guardar y avanzar</span></div>
+      <div class="bottom-bar"><button id="previous-btn">← Anterior</button><button id="undo-btn">Deshacer <kbd>Z</kbd></button><button id="skip-btn" title="Cierra solo este camino">Cerrar rama <kbd>S</kbd></button><button id="finish-btn" title="Disponible cuando no quedan otros caminos pendientes del juego">Finalizar juego <kbd>F</kbd></button><button id="save-btn" class="primary large">Guardar y siguiente <kbd>Espacio</kbd> →</button></div>
+    </section>
+    <aside class="inspector">
+      <div class="game-progress"><h2>Registro del juego</h2><div id="current-progress">Seleccioná una captura para ver el progreso.</div><button id="review-game-btn" type="button" title="Marcar este juego para revisar su dinámica después">☆ Revisar</button></div>
+      <div class="annotations"><div class="section-head"><h2>Clics</h2><button id="clear-btn">Limpiar</button></div><div id="mark-list" class="mark-list"></div></div>
+      <div class="live-note" id="live-note" hidden></div>
+    </aside>
+  </main>
+  <dialog id="progress-dialog" class="progress-dialog">
+    <form method="dialog"><div class="dialog-head"><h2>Registro e historial</h2><button class="close" value="cancel">✕</button></div>
+      <div class="history-tools"><select id="history-provider" aria-label="Proveedor del historial"><option value="">Todos los proveedores</option></select><label><input type="checkbox" id="history-review"> Solo para revisar</label><button type="button" id="export-csv">Exportar CSV</button><button type="button" id="export-json">Exportar JSON con caminos</button></div>
+      <div class="progress-table-wrap"><table class="progress-table"><thead><tr><th>Juego / ID</th><th>Compras realizadas</th><th>Antebets realizados</th><th>Pendientes</th><th>Estado</th><th>Revisión</th></tr></thead><tbody id="progress-rows"></tbody></table></div><p id="progress-summary"></p><details class="registry-issues"><summary>Incidencias (<span id="issue-count">0</span>)</summary><div id="problems" class="problems"></div></details><div class="dialog-actions"><button value="cancel">Cerrar</button></div></form>
+  </dialog>
+  <dialog id="import-dialog">
+    <form method="dialog"><div class="dialog-head"><h2>Importar juegos específicos</h2><button class="close" value="cancel">✕</button></div><p>Pegá un enlace oficial de juego DEMO por línea o cargá un archivo TXT. Podés mezclar los 26 proveedores. Hasta 20.000 enlaces; los duplicados se omiten.</p><p>Los juegos elegidos tienen prioridad y se procesan aunque no tengan compras o antebets confirmados. Los juegos se abrirán en GitHub; las imágenes se descargan en esta PC.</p><input type="file" id="import-file" accept=".txt,text/plain" aria-label="Cargar lista TXT"><textarea id="import-text" spellcheck="false" aria-label="Enlaces de juegos" placeholder="https://www.pragmaticplay.fun/en/slots/candy-rush/&#10;https://demo.bgaming-network.com/play/ThreeLuckyMonkeysHoldAndWin/FUN?server=demo"></textarea><div id="import-result" role="status" aria-live="polite"></div><div class="dialog-actions"><button value="cancel">Cerrar</button><button type="button" class="primary" id="import-submit">Importar lista</button></div></form>
+  </dialog>
+  <dialog id="settings-dialog">
+    <form method="dialog"><div class="dialog-head"><h2>Atajos de teclado</h2><button class="close" value="cancel">✕</button></div><p>Usá la combinación que quieras. La preferencia se guarda localmente en el servidor.</p><div id="key-fields" class="key-fields"></div><div class="dialog-actions"><button type="button" id="reset-keys">Restablecer</button><button type="button" class="primary" id="save-keys">Guardar atajos</button></div></form>
+  </dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
