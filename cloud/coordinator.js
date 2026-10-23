@@ -31,6 +31,11 @@ export async function route(request,env){
  if(p==='/health'&&request.method==='GET')return json({ok:true,service:'fuzzer-manual-cloud',protocol:1});
  const workerRoute=p.startsWith('/worker/');
  if(!await authorized(request,workerRoute?env.WORKER_TOKEN:env.CLIENT_TOKEN))return json({error:'Unauthorized'},401);
+ const source=p.match(/^\/worker\/source\/([a-f0-9]{40})$/);
+ if(source&&request.method==='GET'){
+  const archive=await env.SHOTS.get('runtime/'+source[1]+'.tar');if(!archive)return json({error:'Unknown runtime'},404);
+  return new Response(archive.body,{headers:{'Content-Type':'application/x-tar','Cache-Control':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'}});
+ }
  if(p==='/commands'&&request.method==='POST'){
   const v=await body(request);
   if(!validId(v.id)||!validId(v.clientId)||v.affinity!=null&&!validId(v.affinity)||!v.payload||!['prepare','release','observe'].includes(v.payload.op))throw Error('Invalid command');
