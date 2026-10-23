@@ -104,7 +104,7 @@ test('waiting for the next result never silently changes to another game',()=>{
  const {state,selectFirst}=ui();state.items=[{id:5,game_id:2}];state.focusGameId=1;state.selectedId=null;selectFirst();assert.equal(state.selectedId,null);
  state.items.push({id:6,game_id:1});selectFirst();assert.equal(state.selectedId,6);
 });
-test('executed clicks are gray read-only pins and never become new submitted marks',()=>{
+test('executed clicks are green read-only pins and never become new submitted marks',()=>{
  const {get,state,renderPins}=ui();state.items[0].previousClicks=[{id:8,x:.3,y:.4,label:'Tirada normal',onRoute:true}];renderPins();
  assert.equal(get('pins').children.length,1);assert.equal(get('pins').children[0].className,'pin previous-click');assert.equal(state.marks.length,0);assert.match(get('pins').children[0].title,/ya ejecutado/);
 });
@@ -126,4 +126,10 @@ test('a rejected save preserves its screenshot, marks and selection and never cr
 });
 test('server-side capture refresh disables save even after the page has been reopened',()=>{
  const {context,state,get}=ui();state.items=[{id:11,game_id:7,slug:'game',provider:'test'}];state.selectedId=11;state.serverRefreshing.add(11);context.renderCaptureWait();assert.equal(get('save-btn').disabled,true);assert.equal(get('cloud-wait').disabled,true);
+});
+
+test('executed click indicators are green and text action lists stay hidden',()=>{
+ const css=fs.readFileSync(new URL('../public/style.css',import.meta.url),'utf8'),html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
+ assert.match(css,/\.previous-click\{[^}]*#7aff9a/);assert.match(html,/id="action-history" hidden/);assert.match(html,/id="mark-list"[^>]*hidden/);assert.match(html,/Verde: clic ya ejecutado aquí/);assert.match(html,/Azul: marca nueva sin ejecutar/);
+ const {get,state,renderPins}=ui();state.items[0].previousClicks=[{id:2,x:.25,y:.75,label:'Clic',onRoute:true}];renderPins();const pin=get('pins').children[0];assert.equal(pin.style.left,'25%');assert.equal(pin.style.top,'75%');assert.equal(pin.textContent,'✓');assert.match(get('marks-count').textContent,/1 clics realizados aquí/);
 });

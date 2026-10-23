@@ -34,12 +34,12 @@
         <div id="empty" class="empty-state"><span class="big-icon">▧</span><h2>Capturas listas para catalogar</h2><p>Los navegadores trabajan por separado. Una vez preparada, cada fotografía aparece aquí sin esperas de carga.</p></div>
         <div id="image-wrap" class="image-wrap" hidden><img id="shot" alt="Captura del juego DEMO" draggable="false"><div id="pins" class="pins"></div></div>
       </div>
-      <div class="photo-footer"><span id="cursor" hidden></span><span id="marks-count">0 clics</span><span id="hint">Clic para marcar · Espacio para guardar y avanzar</span></div>
+      <div class="click-legend"><span class="executed-legend">✓ Verde: clic ya ejecutado aquí</span><span class="pending-legend">● Azul: marca nueva sin ejecutar</span></div><div class="photo-footer"><span id="cursor" hidden></span><span id="marks-count">0 clics</span><span id="hint">Clic para marcar · Espacio para guardar y avanzar</span></div>
       <div class="bottom-bar"><button id="previous-btn">← Anterior</button><button id="undo-btn">Deshacer <kbd>Z</kbd></button><button id="skip-btn" title="Cierra solo este camino">Cerrar rama <kbd>S</kbd></button><button id="finish-btn" title="Disponible cuando no quedan otros caminos pendientes del juego">Finalizar juego <kbd>F</kbd></button><button id="save-btn" class="primary large">Guardar y siguiente <kbd>Espacio</kbd> →</button></div>
     </section>
     <aside class="inspector">
       <div class="game-progress"><h2>Registro del juego</h2><div id="current-progress">Seleccioná una captura para ver el progreso.</div><button id="review-game-btn" type="button" title="Marcar este juego para revisar su dinámica después">☆ Revisar</button></div>
-      <section class="action-record"><h2>Acciones de este juego</h2><p id="spin-summary"></p><small>Gris: clic ya ejecutado en esta pantalla · Verde: marca nueva</small><div id="action-history"></div></section><div class="annotations"><div class="section-head"><h2>Clics</h2><button id="clear-btn">Limpiar</button></div><div id="mark-list" class="mark-list"></div></div>
+      <p id="spin-summary"></p><div id="action-history" hidden></div><button id="clear-btn" type="button">Limpiar marcas nuevas</button><div id="mark-list" class="mark-list" hidden></div>
       <div class="live-note" id="live-note" hidden></div>
     </aside>
   </main>

@@ -102,7 +102,7 @@ function renderPins(){
   const pins=$('pins');pins.replaceChildren();const marks=store.review?.savedMarks||store.marks;
   if(!store.review)for(const m of getCurrent()?.previousClicks||[]){const el=document.createElement('div');el.className='pin previous-click';el.style.left=`${m.x*100}%`;el.style.top=`${m.y*100}%`;el.textContent='✓';el.title=`${m.label} ya ejecutado · operación #${m.id}${m.onRoute?' · esta ruta':' · otra ruta'}`;pins.append(el);}
   marks.forEach((m,i)=>{const el=document.createElement('div');el.className='pin'+(m.kind==='antebet'?' antebet':'');el.style.left=`${m.x*100}%`;el.style.top=`${m.y*100}%`;el.textContent=(m.kind==='antebet'?'A':'')+String(i+1);el.title=m.label||`Clic ${i+1}`;pins.append(el);});
-  $('marks-count').textContent=`${marks.length} ${marks.length===1?'marca':'marcas'}`;
+  $('marks-count').textContent=`${store.review?0:(getCurrent()?.previousClicks?.length||0)} clics realizados aquí · ${marks.length} marcas nuevas`;
   const list=$('mark-list');list.replaceChildren();
   const item=getCurrent(),game=store.progress?.find(g=>g.id===item?.game_id);
   $('finish-btn').disabled=!item||!!store.review||!store.features.finishGame||store.marks.length>0||!canFinishGame(game,item);
