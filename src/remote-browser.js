@@ -52,11 +52,11 @@ export class RemoteBrowser {
  }
  async refresh(task,{waitSeconds=0}={}){
   if(!Number.isInteger(waitSeconds)||waitSeconds<0||waitSeconds>60)throw Error("La espera debe ser de 0 a 60 segundos");
-  const capture=captureOf(task),live=this.hasLive(task.id);
+  const liveWorker=this.workers.find(w=>w.live?.includes(Number(task.id))),live=Boolean(liveWorker);
   if(!this.workers.length)throw Error('No hay workers activos. Encendé la flota antes de pedir otra captura.');
   if(!live&&task.parent_task_id)throw Error('La sesión de esta operación terminó. No se repiten compras ni tiradas.');
   const id=`${this.client.clientId}:observe:${task.id}:${randomUUID()}`;
-  await this.client.submit(id,{op:'observe',taskId:task.id,waitSeconds,...(!live?{rootTask:taskData(task)}:{})},live?capture.remoteWorker:null);
+  await this.client.submit(id,{op:'observe',taskId:task.id,waitSeconds,...(!live?{rootTask:taskData(task)}:{})},live?liveWorker.id:null);
   return this.waitForResult(id,task);
  }
  async waitForResult(id,task){

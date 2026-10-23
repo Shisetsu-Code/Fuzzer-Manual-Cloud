@@ -103,3 +103,11 @@ test('archived initial screenshots may reopen but a lost purchase session is nev
  assert.equal(sent[0][1].rootTask.id,4);assert.equal(sent[0][2],null);
  await assert.rejects(()=>browser.refresh({id:5,parent_task_id:4}),/No se repiten/);assert.equal(sent.length,1);
 });
+
+test('recapturing a ready task replaces its timestamp and worker without requeueing',async t=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cloud-refresh-')),db=new CatalogDB(dir);t.after(async()=>{db.close();await fs.rm(dir,{recursive:true,force:true});});
+ db.importUrls(['https://www.pragmaticplay.fun/en/slots/candy-rush/']);db.claim(1);db.ready(1,{capture_file:'old.jpg',capture:{capturedAt:'old',remoteWorker:'old-worker'}});
+ db.refreshReady(1,{file:'new.jpg',capture:{capturedAt:'new',remoteWorker:'new-worker'}});
+ const task=db.getTask(1);assert.equal(task.status,'ready');assert.equal(task.capture_file,'new.jpg');assert.equal(JSON.parse(task.capture_json).remoteWorker,'new-worker');
+ db.finish(1);assert.throws(()=>db.refreshReady(1,{file:'oops',capture:{}}),/clasificada/);
+});
