@@ -21,7 +21,7 @@ const taskData=t=>Object.fromEntries(['id','game_id','url','parent_task_id','via
 export class RemoteBrowser {
  constructor(config,db,{client=null,sleep=ms=>new Promise(r=>setTimeout(r,ms))}={}){
   this.config=config;this.db=db;this.sleep=sleep;this.metrics={sessionsOpened:0,screenshots:0,bytes:0,clicks:0,lastRenderer:'GitHub remoto'};
-  this.client=client;this.workers=[];this.pending=new Set();this.closed=false;this.lastError=null;
+  this.client=client;this.workers=[];this.pending=new Set();this.operations=new Map();this.closed=false;this.lastError=null;
  }
  async start(){
   if(!this.client){await fs.mkdir(this.config.dataDir,{recursive:true});const idFile=path.join(this.config.dataDir,'cloud-client-id');
@@ -66,10 +66,12 @@ export class RemoteBrowser {
   return this.waitForResult(id,task);
  }
  async waitForResult(id,task){
-  this.pending.add(id);
+  this.pending.add(id);const queuedAt=Date.now();let transportFailures=0;
   try{
    while(!this.closed){
-    const row=await this.client.read(id);
+    let row;try{row=await this.client.read(id);transportFailures=0;}catch(e){if(++transportFailures>=5)throw e;await this.sleep(1500);continue;}
+    this.operations.set(task.id,{taskId:task.id,commandId:id,state:row.state,workerId:row.workerId||null});
+    if(row.state==='queued'&&Date.now()-queuedAt>300000)throw Error('No hay un worker libre para esta captura. La solicitud sigue en cola; no se repite ninguna acción.');
     if(['failed','uncertain'].includes(row.state))throw Error(row.error||'LIVE_SESSION_LOST: operación incierta; no se repite');
     if(row.state==='done'){
      const dir=path.join(this.config.dataDir,'shots');await fs.mkdir(dir,{recursive:true});
@@ -82,6 +84,6 @@ export class RemoteBrowser {
     await this.sleep(1000);
    }
    throw Error('LOCAL_CLIENT_CLOSED: el trabajo remoto conserva su identidad');
-  }finally{this.pending.delete(id);}
+  }finally{this.pending.delete(id);if(this.operations.get(task.id)?.commandId===id)this.operations.delete(task.id);}
  }
 }

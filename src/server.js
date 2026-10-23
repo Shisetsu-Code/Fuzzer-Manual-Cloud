@@ -8,6 +8,7 @@ import {CatalogDB} from './db.js';
 import {ImageCache} from './cache.js';
 import {describeQueue} from './queue-context.js';
 import {RemoteBrowser} from './remote-browser.js';
+import {FleetRecovery} from './fleet-recovery.js';
 import {launchFleet} from './fleet.js';
 import {captureOf,captureNeedsLive,captureCanBranch} from './actions.js';
 import {Scheduler} from './scheduler.js';
@@ -28,6 +29,8 @@ const scheduler=new Scheduler({db,browser,cache,workers:config.workers,rootWorke
 // Only recover local polling. Remote commands retain their immutable IDs.
 db.db.prepare("UPDATE tasks SET status='queued' WHERE status='preparing'").run();
 await browser.start();
+const recovery=new FleetRecovery({db,browser,launch:launchFleet});
+const recoveryTimer=setInterval(()=>recovery.tick().catch(e=>{recovery.error=e.message;}),10000);recoveryTimer.unref();
 const here=path.dirname(fileURLToPath(import.meta.url));
 const publicDir=path.resolve(here,'../public');
 const staticPaths=new Map([['/', ['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
@@ -54,7 +57,7 @@ async function handler(req,res){
       const [file,mime]=staticPaths.get(p);const content=await fs.readFile(path.join(publicDir,file));
       res.writeHead(200,{'Content-Type':mime,'Content-Length':content.length,'Cache-Control':'no-cache'});res.end(content);return;
     }
-    if(req.method==='GET'&&p==='/api/status')return json(res,200,{...scheduler.status(),cloud:{clientId:browser.client.clientId,workers:browser.workers,error:browser.lastError,launching:!browser.workers.length&&Date.now()-db.getSetting('last-fleet-start',0)<120000}});
+    if(req.method==='GET'&&p==='/api/status')return json(res,200,{...scheduler.status(),cloud:{clientId:browser.client.clientId,workers:browser.workers,operations:[...browser.operations.values()],error:browser.lastError||recovery.error,launching:recovery.busy||!browser.workers.length&&Date.now()-db.getSetting('last-fleet-start',0)<120000}});
     if(req.method==='GET'&&p==='/api/providers')return json(res,200,{providers:Object.entries(PROVIDERS).map(([id,[name]])=>({id,name,...db.providerBuffer()[id]})),limits:{intervalMs:60000,maxGames:100,maxCaptures:100}});
     if(req.method==='GET'&&p==='/api/progress')return json(res,200,{games:db.gameProgress()});
     if(req.method==='GET'&&p==='/api/history/export'){
@@ -85,9 +88,10 @@ async function handler(req,res){
       const body=await receive(req);
       const imported=importSelectedGames(db,body.urls);scheduler.pump();return json(res,200,imported);
     }
-    if(req.method==='POST'&&p==='/api/cloud/stop'){scheduler.setPause(true);await browser.client.call('/fleet/stop',{method:'POST',body:{clientId:browser.client.clientId}});return json(res,200,{ok:true});}
+    if(req.method==='POST'&&p==='/api/cloud/stop'){scheduler.setPause(true);db.setSetting('fleet-recovery-enabled',false);await browser.client.call('/fleet/stop',{method:'POST',body:{clientId:browser.client.clientId}});return json(res,200,{ok:true});}
     if(req.method==='POST'&&p==='/api/run'){
       const body=await receive(req);
+      if(body.running){db.setSetting('fleet-recovery-enabled',true);if(body.fleet)db.setSetting('fleet-options',body.fleet);}
       if(body.running&&!browser.workers.length){
        if(Date.now()-db.getSetting('last-fleet-start',0)<120000)throw Error('La flota ya está arrancando; esperá a que aparezcan los workers.');
        await launchFleet(browser.client.clientId,body.fleet||{});db.setSetting('last-fleet-start',Date.now());
@@ -131,6 +135,6 @@ server.listen(config.port,config.host,()=>{
   scheduler.start();
   console.log('Capturas y clasificación locales; navegadores en GitHub.');
 });
-async function close(){scheduler.setPause(true);scheduler.stop();server.close();await browser.stop();db.close();}
+async function close(){clearInterval(recoveryTimer);scheduler.setPause(true);scheduler.stop();server.close();await browser.stop();db.close();}
 let shuttingDown=false;
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{if(!shuttingDown){shuttingDown=true;close().finally(()=>process.exit(0));}});

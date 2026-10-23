@@ -109,3 +109,6 @@ Tras enviar marcas, la vista espera la siguiente captura del mismo juego. Para t
 
 
 Los juegos nuevos tienen **un minuto de carga por defecto** antes de entregar la primera captura. Las continuaciones no reciben una espera extra obligatoria. La opción de espera adicional también arranca en 60 segundos y funciona por juego: podés pedir una recaptura en A, seleccionar B y pedir otra sin esperar a A. Las tarjetas muestran «Esperando captura…» y los clics quedan bloqueados solo en la operación que está actualizándose. La flota que ya estaba abierta conserva sus sesiones y recibe esta espera inicial desde el cliente, sin cerrar los juegos.
+
+
+Si una tarjeta dice **Esperando worker libre**, todavía no empezó su captura: falta una sesión disponible. **Capturando en worker** indica que ya se ejecuta. Los fallos pasajeros de consulta a D1 no cierran de inmediato los navegadores. Si hay trabajo pendiente y se perdió parte de la flota, el lanzador repone solo los workers que faltan, con una pausa entre intentos; **Apagar workers** desactiva esta recuperación. Las flotas de reposición conservan las sesiones originales y no repiten compras ni tiradas.

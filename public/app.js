@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const DEFAULT_KEYS={next:'Space',previous:'Shift+Space',undo:'KeyZ',skip:'KeyS',pause:'KeyP',finish:'KeyF'};
 const KEY_LABELS={next:'Guardar y siguiente',previous:'Ver anterior',undo:'Deshacer',skip:'Cerrar rama',pause:'Pausar preparación',finish:'Finalizar juego'};
-const store={providerFilter:'',focusGameId:null,focusGameName:'',items:[],selectedId:null,marks:[],features:{},progress:null,history:[],review:null,optimistic:new Set(),imageKeep:new Map(),hotkeys:{...DEFAULT_KEYS},waitErrors:new Map(),refreshing:new Set(),running:false,remoteOnline:false,pollBusy:false};
+const store={providerFilter:'',focusGameId:null,focusGameName:'',items:[],selectedId:null,marks:[],features:{},progress:null,history:[],review:null,optimistic:new Set(),imageKeep:new Map(),hotkeys:{...DEFAULT_KEYS},remoteOperations:new Map(),waitErrors:new Map(),refreshing:new Set(),running:false,remoteOnline:false,pollBusy:false};
 let toastTimer;
 function toast(text,isError=false){const node=$('toast');node.textContent=text;node.className=isError?'error':'';node.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.style.display='none',3000);}
 function problemText(error){
@@ -139,13 +139,14 @@ function renderQueue(){
     const name=document.createElement('div');name.className='name';name.textContent=item.name||item.slug;
     const line=document.createElement('div');line.className='detail';
     const first=document.createElement('span');first.textContent=`${item.provider||'pragmatic'} · Juego #${item.game_id} · ${group.length} operación(es)`;
-    const last=document.createElement('span');last.textContent=store.waitErrors.has(item.id)?'Falló actualización':store.refreshing.has(item.id)?'Esperando captura…':item.capture?.entryReview?'Acceso pendiente':item.capture?.manualReview?(item.capture?.gameRunning?'Iniciado':item.capture?.gameRunning===false?'Inicio pendiente':'Manual'):item.capture?.state==='BONUS'?'Bonus':item.live?'En sesión':'Lista';
+    const last=document.createElement('span');last.textContent=store.waitErrors.has(item.id)?'Falló actualización':store.refreshing.has(item.id)?(store.remoteOperations.get(item.id)?.state==='queued'?'Esperando worker libre':'Capturando en worker…'):item.capture?.entryReview?'Acceso pendiente':item.capture?.manualReview?(item.capture?.gameRunning?'Iniciado':item.capture?.gameRunning===false?'Inicio pendiente':'Manual'):item.capture?.state==='BONUS'?'Bonus':item.live?'En sesión':'Lista';
     line.append(first,last);el.append(name,line);
     if(antebetNotice(item.capture)){const warning=document.createElement('small');warning.className='antebet-alert';warning.textContent='⚠ Antebet pendiente';el.append(warning);}
     el.addEventListener('click',()=>{if(store.marks.length){if(!confirm('¿Descartar marcas todavía no guardadas?'))return;store.marks=[];}store.review=null;store.focusGameId=item.game_id;store.focusGameName=item.name||item.slug;store.selectedId=item.id;display();});list.append(el);
   }
 }
 function renderStatus(status){
+  store.remoteOperations=new Map((status.cloud?.operations||[]).map(op=>[op.taskId,op]));
   const lanes=status.providerWorkers||[];
   if(status.cloud){store.remoteOnline=status.cloud.workers.length>0;$('pause-btn').disabled=!!status.cloud.launching;$('cloud-client-id').textContent=status.cloud.clientId;lanes.splice(0,lanes.length,...status.cloud.workers.map(w=>({provider:w.id,state:'working',captures:w.live.length})));}
   $('workers-summary').textContent=status.cloud?`${status.cloud.workers.length} workers remotos · ${status.live} sesiones vivas`:`${status.activeRoots||0} proveedores cargando`;
@@ -288,7 +289,7 @@ $('cloud-stop').addEventListener('click',async()=>{if(!confirm('Los workers term
 function renderCaptureWait(){
  const item=getCurrent(),busy=!!item&&store.refreshing.has(item.id);
  $('cloud-refresh').disabled=!item||!!store.review||busy;$('cloud-wait').disabled=!item||!!store.review||busy;
- $('cloud-wait').textContent=busy?'Esperando nueva captura…':'Sigue cargando · esperar y capturar';
+ $('cloud-wait').textContent=busy?(store.remoteOperations.get(item.id)?.state==='queued'?'Esperando worker libre…':'Esperando nueva captura…'):'Sigue cargando · esperar y capturar';
  const waitError=item&&store.waitErrors.get(item.id);if(waitError){$('live-note').hidden=false;$('live-note').textContent=`No llegó una captura nueva: ${waitError}. La imagen visible es la anterior.`;}
  if(busy){$('save-btn').disabled=true;$('skip-btn').disabled=true;$('finish-btn').disabled=true;}
 }

@@ -111,3 +111,9 @@ test('recapturing a ready task replaces its timestamp and worker without requeue
  const task=db.getTask(1);assert.equal(task.status,'ready');assert.equal(task.capture_file,'new.jpg');assert.equal(JSON.parse(task.capture_json).remoteWorker,'new-worker');
  db.finish(1);assert.throws(()=>db.refreshReady(1,{file:'oops',capture:{}}),/clasificada/);
 });
+
+test('read-only polling survives a transient relay outage without submitting an action again',async t=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cloud-poll-retry-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));let reads=0;
+ const client={read:async()=>{if(++reads===1)throw Error('D1 network');return {state:'done',workerId:'w',result:{capture:{},live:true}};},call:async()=>new Response(new Uint8Array([255,216,255,217]))};
+ const browser=new RemoteBrowser({dataDir:dir},{},{client,sleep:async()=>{}});const result=await browser.waitForResult('poll-only',{id:77});assert.equal(reads,2);assert.equal(result.live,true);assert.equal(browser.pending.size,0);assert.equal(browser.operations.size,0);
+});
