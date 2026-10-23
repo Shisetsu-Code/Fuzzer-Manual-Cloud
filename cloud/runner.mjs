@@ -74,10 +74,10 @@ async function execute(command){
  }catch(e){await call(`/worker/${command.id}/fail`,{...identity,error:String(e.code||e.message).slice(0,250)}).catch(()=>{});console.log(JSON.stringify({event:'needs_review',command:command.id,error:String(e.code||'execution_error')}));}
 }
 await engine.start();await heartbeat();
-const timer=setInterval(()=>heartbeat().catch(()=>{stop=true;}),20000);
+let heartbeatFailures=0;const timer=setInterval(()=>heartbeat().then(()=>{heartbeatFailures=0;}).catch(()=>{heartbeatFailures++;console.log(JSON.stringify({event:'heartbeat_retry',failures:heartbeatFailures}));if(heartbeatFailures>=3)stop=true;}),20000);
 try{
  while(!stop&&Date.now()<deadline){
-  if(active.size<capacity){const {command}=await call('/worker/claim',{workerId,clientId,allowNew:engine.liveCount()+active.size<capacity});
+  if(active.size<capacity){let command;try{({command}=await call('/worker/claim',{workerId,clientId,allowNew:engine.liveCount()+active.size<capacity}));}catch{console.log(JSON.stringify({event:'claim_transport_retry'}));await new Promise(r=>setTimeout(r,1500));continue;}
    if(command){const promise=execute(command);active.add(promise);promise.finally(()=>active.delete(promise));continue;}
   }
   await new Promise(r=>setTimeout(r,700));

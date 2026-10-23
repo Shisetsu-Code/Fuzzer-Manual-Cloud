@@ -23,7 +23,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: manual-cloud-${{ inputs.client_id }}
+  group: manual-cloud-${{ inputs.client_id }}-${{ github.run_id }}
   cancel-in-progress: false
 jobs:
   plan:
