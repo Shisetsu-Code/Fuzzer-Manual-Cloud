@@ -36,7 +36,7 @@ export class RemoteBrowser {
  stop(){this.closed=true;clearInterval(this.timer);return Promise.resolve();}
  hasLive(taskId){return this.workers.some(w=>w.live?.includes(Number(taskId)));}
  liveCount(){return this.workers.reduce((n,w)=>n+(w.live?.length||0),0);}
- modernSlots(sequence=false){sequence=sequence||this.workers.some(w=>/-(?:sequence3|har4)$/.test(w.id));return this.workers.filter(w=>(!sequence||/-(?:sequence3|har4)$/.test(w.id))&&/-(?:batch2|sequence3|har4)$/.test(w.id)&&w.capacity-w.live.length-w.active-(this.newReservations.get(w.id)||0)>0);}
+ modernSlots(sequence=false){sequence=sequence||this.workers.some(w=>/-(?:sequence3|har4)$/.test(w.id));return this.workers.filter(w=>(!this.workers.some(x=>x.id.endsWith('-har4'))||w.id.endsWith('-har4'))&&(!sequence||/-(?:sequence3|har4)$/.test(w.id))&&/-(?:batch2|sequence3|har4)$/.test(w.id)&&w.capacity-w.live.length-w.active-(this.newReservations.get(w.id)||0)>0);}
  canPrepare(task){if(task&&this.db.getMark?.(task.via_mark_id)?.kind==='sequence'){const source=this.db.getTask(task.parent_task_id);if(/-(?:sequence3|har4)$/.test(captureOf(source).remoteWorker||'')&&this.hasLive(task.parent_task_id))return true;return this.modernSlots(true).length>0;}if(task&&(task.replay_branch||task.fresh_start||!task.parent_task_id)&&this.workers.some(w=>/-(?:batch2|sequence3|har4)$/.test(w.id)))return this.modernSlots().length>0;return this.workers.length>0;}
  async release(taskId){
   const worker=this.workers.find(w=>w.live?.includes(Number(taskId)));if(!worker)return false;

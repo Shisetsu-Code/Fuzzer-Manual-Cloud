@@ -17,7 +17,7 @@ export class ReplayManager{
      try{const row=await this.browser.client.read(item.commandId);
       if(row.state==='done'){
        item.report=row.result;item.status=row.result.status==='replayed'&&!row.result.networkError&&row.result.archives?.some(a=>a.metadata?.kind==='har')?'replayed':'partial';
-       for(const archive of row.result.archives||[])try{await this.network.download(archive.id);}catch(e){item.downloadError=e.message;}
+       for(const archive of row.result.archives||[])this.network.download(archive.id).catch(e=>{item.downloadError=e.message;});
       }else if(['failed','uncertain'].includes(row.state)){item.status=row.state;item.error=row.error;}
      }catch(e){item.error=e.message;}
     }
